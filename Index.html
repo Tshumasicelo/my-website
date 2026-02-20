@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aspects Nich Micro-Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* ================= ROOT THEME ================= */
+        :root {
+            --bg: #f4f4f4;
+            --card: rgba(255, 255, 255, 0.8);
+            --text: #111;
+            --accent: #ffcc00;
+            --danger: #ff4444;
+            --glass-border: rgba(255, 255, 255, 0.3);
+        }
+
+        body.dark {
+            --bg: #0f172a;
+            --card: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { box-sizing: border-box; transition: background 0.3s, color 0.3s; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* ================= START PAGE (REVERTED) ================= */
+        .start-page {
+            height: 100vh;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), 
+                        url('https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2000&auto=format&fit=crop') center/cover;
+            color: white;
+        }
+
+        .start-page h1 { font-size: 4rem; margin: 0; letter-spacing: -2px; }
+        .start-page p { font-size: 1.2rem; opacity: 0.8; }
+        
+        .btn-launch {
+            margin-top: 1.5rem;
+            padding: 0.8rem 2rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 30px;
+            background: linear-gradient(90deg, #ffcc00, #ff9900);
+            color: #000;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 204, 0, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(255, 204, 0, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 204, 0, 0); }
+        }
+
+        /* ================= APP LAYOUT ================= */
+        .app { display: none; min-height: 100vh; padding-bottom: 50px; }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--card);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+
+        .card {
+            background: var(--card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .balance-hero { text-align: center; margin-bottom: 1rem; }
+        .balance-hero h2 { font-size: 3rem; margin: 0.5rem 0; color: var(--accent); }
+
+        /* ================= UI ELEMENTS ================= */
+        .btn-group { display: flex; gap: 10px; margin-top: 1rem; }
+        button {
+            padding: 0.8rem 1.5rem;
+            border-radius: 12px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+        }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-outline { background: rgba(128,128,128,0.1); color: var(--text); border: 1px solid var(--glass-border); }
+        .btn-danger { background: var(--danger); color: white; margin-top: 2rem; width: 100%; }
+
+        /* ================= LISTS ================= */
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.8rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; background: rgba(128,128,128,0.2); margin-right: 8px; vertical-align: middle; }
+
+        /* ================= MODAL ================= */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--bg);
+            padding: 2rem;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 400px;
+        }
+        input, select {
+            width: 100%;
+            padding: 1rem;
+            margin: 10px 0;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            background: rgba(128,128,128,0.05);
+            color: var(--text);
+        }
+    </style>
+</head>
+<body class="dark">
+
+<section id="startPage" class="start-page">
+    <h1>ASPECTS</h1>
+    <p>Financial Precision & Micro-Tasking</p>
+    <button class="btn-launch" onclick="launchApp()">ENTER SYSTEM</button>
+</section>
+
+<main id="app" class="app">
+    <header>
+        <span style="font-weight:900; letter-spacing:1px;">ASPECTS.IO</span>
+        <div>
+            <button class="btn-outline" onclick="toggleTheme()" id="themeBtn" style="padding: 0.5rem 1rem;">🌙</button>
+            <button class="btn-outline" onclick="exitApp()" style="padding: 0.5rem 1rem;">Exit</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Finance Section -->
+        <div class="card">
+            <div class="balance-hero">
+                <small>Current Liquid Balance</small>
+                <h2 id="balanceDisplay">$0.00</h2>
+            </div>
+            <canvas id="mainChart" height="150"></canvas>
+            <div class="btn-group">
+                <button class="btn-primary" onclick="openModal('income')">+ Income</button>
+                <button class="btn-outline" onclick="openModal('expense')">- Expense</button>
+            </div>
+        </div>
+
+        <!-- Task Section -->
+        <div class="card">
+            <h3>Micro-Tasks</h3>
+            <div id="taskList"></div>
+            <div class="btn-group" style="margin-top:20px;">
+                <input type="text" id="taskInput" placeholder="Enter micro-goal..." style="margin:0;">
+                <button class="btn-primary" onclick="addTask()" style="flex:0 0 80px;">Add</button>
+            </div>
+        </div>
+
+        <!-- History Log -->
+        <div class="card">
+            <h3>Activity Log</h3>
+            <div id="historyLog"></div>
+        </div>
+
+        <!-- Danger Zone -->
+        <button class="btn-danger" id="nukeBtn">NUKE ALL DATA ☢️</button>
+    </div>
+</main>
+
+<!-- Transaction Modal -->
+<div id="txModal" class="modal">
+    <div class="modal-content">
+        <h2 id="modalTitle">Transaction</h2>
+        <input type="number" id="txAmount" placeholder="Amount (R)">
+        <select id="txCategory">
+            <option value="General">General</option>
+            <option value="Food">🍔 Food & Drink</option>
+            <option value="Transport">🚗 Transport</option>
+            <option value="Tech">💻 Technology</option>
+            <option value="Housing">🏠 Housing</option>
+            <option value="Leisure">🎉 Leisure</option>
+        </select>
+        <div class="btn-group">
+            <button class="btn-primary" onclick="processTransaction()">Confirm</button>
+            <button class="btn-outline" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    let state = {
+        balance: parseFloat(localStorage.getItem('aspects_balance')) || 0,
+        history: JSON.parse(localStorage.getItem('aspects_history')) || [0],
+        logs: JSON.parse(localStorage.getItem('aspects_logs')) || [],
+        tasks: JSON.parse(localStorage.getItem('aspects_tasks')) || [],
+        isDark: localStorage.getItem('aspects_dark') !== 'false',
+        modalMode: 'income'
+    };
+
+    let chart;
+
+    // --- INITIALIZATION ---
+    function launchApp() {
+        document.getElementById('startPage').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        initChart();
+        render();
+    }
+
+    function exitApp() {
+        document.getElementById('startPage').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: state.history.map((_, i) => i),
+                datasets: [{
+                    label: 'Balance',
+                    data: state.history,
+                    borderColor: '#ffcc00',
+                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false }, y: { display: false } }
+            }
+        });
+    }
+
+    // --- CORE LOGIC ---
+    function openModal(mode) {
+        state.modalMode = mode;
+        document.getElementById('modalTitle').innerText = mode === 'income' ? 'Add Income' : 'Add Expense';
+        document.getElementById('txCategory').style.display = mode === 'income' ? 'none' : 'block';
+        document.getElementById('txModal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('txModal').classList.remove('active');
+    }
+
+    function processTransaction() {
+        const amount = parseFloat(document.getElementById('txAmount').value);
+        const category = document.getElementById('txCategory').value;
+        if (!amount || amount <= 0) return;
+
+        const val = state.modalMode === 'income' ? amount : -amount;
+        state.balance += val;
+        state.history.push(state.balance);
+        
+        state.logs.unshift({
+            type: state.modalMode,
+            amount: amount,
+            category: state.modalMode === 'income' ? 'Income' : category,
+            date: new Date().toLocaleTimeString()
+        });
+
+        saveAndRender();
+        closeModal();
+        document.getElementById('txAmount').value = '';
+    }
+
+    function addTask() {
+        const input = document.getElementById('taskInput');
+        if (!input.value) return;
+        state.tasks.push(input.value);
+        input.value = '';
+        saveAndRender();
+    }
+
+    function deleteTask(index) {
+        state.tasks.splice(index, 1);
+        saveAndRender();
+    }
+
+    function toggleTheme() {
+        state.isDark = !state.isDark;
+        document.body.classList.toggle('dark', state.isDark);
+        document.getElementById('themeBtn').innerText = state.isDark ? '🌙' : '☀️';
+        localStorage.setItem('aspects_dark', state.isDark);
+    }
+
+    function confirmReset() {
+        alert("☢️ NUKE CONFIRMED");
+
+        state.balance = 0;
+        state.history = [0];
+        state.logs = [];
+        state.tasks = [];
+
+        localStorage.clear();
+
+        render();
+
+        if (chart) {
+            chart.data.labels = [0];
+            chart.data.datasets[0].data = [0];
+            chart.update();
+        }
+    }
+
+    // --- RENDERING ---
+    function saveAndRender() {
+        localStorage.setItem('aspects_balance', state.balance);
+        localStorage.setItem('aspects_history', JSON.stringify(state.history));
+        localStorage.setItem('aspects_logs', JSON.stringify(state.logs));
+        localStorage.setItem('aspects_tasks', JSON.stringify(state.tasks));
+        render();
+    }
+
+    function render() {
+        document.getElementById('balanceDisplay').innerText = `R ${state.balance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        
+        // Render Tasks
+        document.getElementById('taskList').innerHTML = state.tasks.map((t, i) => `
+            <div class="list-item">
+                <span>${t}</span>
+                <span style="color:var(--danger); cursor:pointer;" onclick="deleteTask(${i})">✕</span>
+            </div>
+        `).join('');
+
+        // Render Logs
+        document.getElementById('historyLog').innerHTML = state.logs.slice(0, 5).map(log => `
+            <div class="list-item" style="font-size:0.9rem">
+                <span><span class="tag">${log.category}</span> ${log.date}</span>
+                <span style="color:${log.type === 'income' ? '#44ff44' : '#ff4444'}">
+                    ${log.type === 'income' ? '+' : '-'}R ${log.amount}
+                </span>
+            </div>
+        `).join('');
+
+        // Update Chart
+        if (chart) {
+            chart.data.labels = state.history.map((_, i) => i);
+            chart.data.datasets[0].data = state.history;
+            chart.update();
+        }
+    }
+
+    // Init Theme
+    document.body.classList.toggle('dark', state.isDark);
+    document.getElementById('themeBtn').innerText = state.isDark ? '🌙' : '☀️';
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const nukeBtn = document.getElementById("nukeBtn");
+
+        if (!nukeBtn) {
+            console.error("❌ Nuke button not found");
+            return;
+        }
+
+        nukeBtn.addEventListener("click", () => {
+            console.log("☢️ NUKE BUTTON CLICKED");
+            confirmReset();
+        });
+    });
+</script>
+
+</body>
+</html>
