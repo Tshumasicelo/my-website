@@ -8,12 +8,29 @@
 <meta name="theme-color" content="#0a0b10">
 <title>ASPECTS — Money &amp; Micro-Goals</title>
 
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ASPECTS">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- media="print" keeps this off the critical path: a slow or blocked font host can
+     never stall rendering. The system fallback shows instantly; Inter swaps in when
+     it lands. Without this, a hanging stylesheet also blocks the parser-blocking
+     script below, and the page never renders at all. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></noscript>
 
-<!-- Pinned: an unpinned "npm/chart.js" resolves to whatever is latest and can break without warning. -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<!-- Pinned: an unpinned "npm/chart.js" resolves to whatever is latest and can break
+     without warning. async so a slow CDN blocks neither parsing nor DOMContentLoaded
+     (defer would block the latter, booting nothing). If it lands after boot, the load
+     handler below builds the charts then. -->
+<script async id="chartLib" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 
 <style>
 /* ============================================================
@@ -84,6 +101,11 @@ html[data-theme="dark"] {
    2. RESET & BASE
    ============================================================ */
 *, *::before, *::after { box-sizing: border-box; }
+
+/* The browser's own [hidden] rule is a UA style, so ANY author rule that sets
+   display (.chip, .btn, .field...) silently beats it and the element stays on
+   screen. This makes the hidden attribute mean what it says, everywhere. */
+[hidden] { display: none !important; }
 
 html, body { height: 100%; }
 
@@ -160,6 +182,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .chip.flame { color: var(--amber); background: var(--warn-soft); border-color: transparent; }
 .chip.level { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.chip.offline { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 
 .icon-btn {
   width: 34px; height: 34px; flex: none;
@@ -575,6 +598,7 @@ select.input {
     </div>
   </div>
   <div class="appbar-actions">
+    <span class="chip offline" id="offlineChip" hidden title="No connection — the app is running from its offline cache">⚡ Offline</span>
     <span class="chip flame" id="streakChip" title="Daily task streak">🔥 <span id="streakNum">0</span></span>
     <span class="chip level" id="levelChip" title="Experience level">Lv <span id="levelNum">1</span></span>
     <button class="kbd-btn" id="paletteBtn" aria-label="Open command palette">
@@ -767,6 +791,13 @@ select.input {
       <div class="card-head" style="margin:20px 0 10px;"><h3>Keyboard</h3></div>
       <div class="shortcut-list" id="shortcutList"></div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>Install as an app</h3><span class="card-sub spacer" id="installStatus"></span></div>
+    <p class="hint" style="margin-bottom:14px;">Add ASPECTS to your home screen. It opens full screen with no browser bars, and works with no internet at all.</p>
+    <button class="btn btn-primary" id="installBtn" hidden>⬇ Install ASPECTS</button>
+    <p class="hint" id="installHint"></p>
   </div>
 
   <div class="card">
@@ -1322,19 +1353,36 @@ function addXP(amount) {
 /* ============================================================
    TOASTS
    ============================================================ */
-function toast(msg, kind = "info", emoji = "") {
+function toast(msg, kind = "info", emoji = "", action = null) {
   const host = $("#toasts");
   if (!host) return;
   const el = document.createElement("div");
   el.className = "toast " + kind;
   el.innerHTML = (emoji ? '<span class="t-emoji" aria-hidden="true">' + esc(emoji) + "</span>" : "") +
                  "<span>" + esc(msg) + "</span>";
+
+  if (action) {
+    // An actionable toast stays until it is answered — dismissing it silently
+    // would hide the very thing it is asking about.
+    const btn = document.createElement("button");
+    btn.className = "btn btn-primary btn-sm";
+    btn.style.marginLeft = "auto";
+    btn.textContent = action.label;
+    btn.addEventListener("click", () => { el.remove(); action.run(); });
+    el.appendChild(btn);
+    el.dataset.sticky = "1";
+  }
+
   host.appendChild(el);
-  setTimeout(() => {
-    el.classList.add("out");
-    setTimeout(() => el.remove(), 260);
-  }, 3200);
-  while (host.children.length > 4) host.firstChild.remove();
+  if (!action) {
+    setTimeout(() => {
+      el.classList.add("out");
+      setTimeout(() => el.remove(), 260);
+    }, 3200);
+  }
+  while (host.querySelectorAll(".toast:not([data-sticky])").length > 4) {
+    host.querySelector(".toast:not([data-sticky])").remove();
+  }
 }
 
 /* ============================================================
@@ -1693,6 +1741,7 @@ function renderSettings() {
       S.goals.length + " goals · " + (bytes / 1024).toFixed(1) + " KB stored";
   } catch (_) { $("#storageInfo").textContent = ""; }
 
+  renderInstall();
   $("#shortcutList").innerHTML = SHORTCUT_HELP
     .map(s => '<div class="shortcut-row"><span>' + esc(s[1]) + "</span><kbd>" + esc(s[0]) + "</kbd></div>").join("");
 }
@@ -1711,11 +1760,13 @@ function renderCharts() {
   if (typeof Chart === "undefined") {
     $$(".chart-box").forEach(box => {
       if (box.dataset.fallback) return;
+      if (!box.dataset.orig) box.dataset.orig = box.innerHTML;   // keep the canvas to restore
       box.dataset.fallback = "1";
       box.innerHTML = emptyState("📉", "Charts unavailable offline", "Your numbers below are unaffected");
     });
     return;
   }
+  restoreChartBoxes();
 
   const accent = cssVar("--accent") || "#7d6dff";
   const grid   = cssVar("--grid") || "rgba(255,255,255,.04)";
@@ -1806,6 +1857,19 @@ function renderCharts() {
       }
     });
   }
+}
+
+/* Put the canvases back after the library shows up late. */
+function restoreChartBoxes() {
+  let restored = false;
+  $$(".chart-box").forEach(box => {
+    if (box.dataset.fallback && box.dataset.orig) {
+      box.innerHTML = box.dataset.orig;
+      delete box.dataset.fallback;
+      restored = true;
+    }
+  });
+  if (restored) { charts.trend = null; charts.cat = null; }
 }
 
 function rebuildCharts() {
@@ -2539,6 +2603,118 @@ function wire() {
 }
 
 /* ============================================================
+   PWA — install, updates, offline
+   ============================================================ */
+let deferredInstall = null;
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+         window.matchMedia("(display-mode: minimal-ui)").matches ||
+         navigator.standalone === true;
+}
+
+function renderInstall() {
+  const btn = $("#installBtn"), status = $("#installStatus"), hint = $("#installHint");
+  if (!btn) return;
+
+  if (isStandalone()) {
+    btn.hidden = true;
+    status.textContent = "installed";
+    hint.textContent = "You are running the installed app. Everything works with no connection.";
+  } else if (deferredInstall) {
+    btn.hidden = false;
+    status.textContent = "ready to install";
+    hint.textContent = "";
+  } else {
+    btn.hidden = true;
+    status.textContent = "";
+    // Safari never fires beforeinstallprompt, so iOS users need the manual route.
+    hint.textContent = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      ? "On iPhone or iPad: tap the Share button, then choose “Add to Home Screen”."
+      : "If no button appears, use your browser's install icon in the address bar, or its menu → “Install app”.";
+  }
+}
+
+function promptUpdate(worker) {
+  toast("A new version is ready", "info", "✨", {
+    label: "Reload",
+    run: () => worker.postMessage("SKIP_WAITING")
+  });
+}
+
+function initPWA() {
+  const syncOnline = () => { const c = $("#offlineChip"); if (c) c.hidden = navigator.onLine; };
+  window.addEventListener("online",  () => { syncOnline(); toast("Back online", "good", "📶"); });
+  window.addEventListener("offline", () => { syncOnline(); toast("Offline — everything still works", "info", "⚡"); });
+  syncOnline();
+
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();          // keep the mini-infobar away; we offer our own button
+    deferredInstall = e;
+    renderInstall();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredInstall = null;
+    renderInstall();
+    toast("ASPECTS installed", "good", "🎉");
+    confetti();
+  });
+
+  const btn = $("#installBtn");
+  if (btn) btn.addEventListener("click", async () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    const choice = await deferredInstall.userChoice.catch(() => ({ outcome: "dismissed" }));
+    deferredInstall = null;
+    renderInstall();
+    if (choice.outcome === "dismissed") toast("Install cancelled", "info", "");
+  });
+
+  renderInstall();
+
+  if (!("serviceWorker" in navigator)) return;
+
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    if (reg.waiting && navigator.serviceWorker.controller) promptUpdate(reg.waiting);
+
+    reg.addEventListener("updatefound", () => {
+      const incoming = reg.installing;
+      if (!incoming) return;
+      incoming.addEventListener("statechange", () => {
+        // Reaching "installed" while a worker already controls the page means
+        // this is an update rather than the very first install.
+        if (incoming.state === "installed" && navigator.serviceWorker.controller) promptUpdate(incoming);
+      });
+    });
+  }).catch(err => console.warn("Service worker registration failed:", err));
+
+  // A first install claims the page and fires controllerchange too. Only an
+  // update -- where a controller already existed -- warrants a reload.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
+/* Home-screen shortcuts navigate to ./?go=expense and friends. */
+function handleLaunchShortcut() {
+  let go = null;
+  try { go = new URLSearchParams(location.search).get("go"); } catch (_) { return; }
+  if (!go) return;
+
+  history.replaceState(null, "", location.pathname);   // don't re-fire on reload
+  setTimeout(() => {
+    if (go === "income" || go === "expense") openTx(go);
+    else if (go === "task") { setView("tasks"); openTaskModal(); }
+    else if (go === "goals") setView("goals");
+  }, 420);
+}
+
+/* ============================================================
    BOOT
    ============================================================ */
 function boot() {
@@ -2549,6 +2725,13 @@ function boot() {
   if (navigator.platform && /Mac/i.test(navigator.platform)) $("#palKbd").textContent = "⌘ K";
 
   wire();
+
+  // The chart library is async, so it may arrive after boot. Draw when it does.
+  const lib = document.getElementById("chartLib");
+  if (lib && typeof Chart === "undefined") {
+    lib.addEventListener("load", () => { restoreChartBoxes(); renderCharts(); }, { once: true });
+  }
+
   ui.month = thisYM();
   render();
   renderPomo();
@@ -2558,6 +2741,9 @@ function boot() {
     if (pomoRemaining() > 0) { pomoTimer = setInterval(tickPomo, 1000); }
     else finishPomo();
   }
+
+  initPWA();
+  handleLaunchShortcut();
 
   if (!S.tx.length && !S.tasks.length && !S.goals.length) {
     setTimeout(() => toast("Welcome to ASPECTS — press Ctrl K to explore", "info", "👋"), 800);
