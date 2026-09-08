@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ASPECTS TV</string>
+
+    <string name="row_favourites">Favourites</string>
+    <string name="row_tv_apps">TV Apps</string>
+    <string name="row_all_apps">All Apps</string>
+    <string name="row_system">System</string>
+
+    <string name="settings_title">ASPECTS TV settings</string>
+    <string name="accent_colour">Accent colour</string>
+    <string name="clock_24h">24-hour clock</string>
+    <string name="show_sideloaded">Show sideloaded (non-TV) apps</string>
+    <string name="show_system_row">Show the System row</string>
+    <string name="show_stats">Show system stats in the header</string>
+    <string name="set_default_home">Set ASPECTS TV as the home screen</string>
+
+    <string name="action_open">Open</string>
+    <string name="action_pin">Add to Favourites</string>
+    <string name="action_unpin">Remove from Favourites</string>
+    <string name="action_info">App info</string>
+    <string name="action_uninstall">Uninstall</string>
+
+    <string name="tile_settings">Settings</string>
+    <string name="tile_network">Network</string>
+    <string name="tile_display">Display</string>
+    <string name="tile_apps">Apps</string>
+    <string name="tile_storage">Storage</string>
+    <string name="tile_datetime">Date &amp; time</string>
+    <string name="tile_developer">Developer</string>
+    <string name="tile_home">Home app</string>
+    <string name="tile_launcher">Theme</string>
+
+    <string name="state_on">ON</string>
+    <string name="state_off">OFF</string>
+
+    <string name="no_apps">No apps found. Open Settings to check installed apps.</string>
+    <string name="cant_open">Couldn\'t open that screen on this TV.</string>
+</resources>
