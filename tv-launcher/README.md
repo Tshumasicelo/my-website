@@ -38,10 +38,11 @@ fast cold start over visual gimmicks.
 You already have **Downloader** installed. Open it and enter:
 
 ```
-https://github.com/Tshumasicelo/my-website/releases/latest/download/aspects-tv.apk
+https://github.com/Tshumasicelo/my-website/releases/download/tv-latest/aspects-tv.apk
 ```
 
-Then **Install**. That URL always points at the newest build.
+Then **Install**. CI republishes that same tag on every build, so the URL
+never changes.
 
 > If Android blocks it, allow **Downloader** under
 > *Settings → Apps → Special app access → Install unknown apps*.
