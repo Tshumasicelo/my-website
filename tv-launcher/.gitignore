@@ -1,0 +1,12 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.cxx/
+
+# Signing keys must never enter this repo - it is public.
+# CI injects the keystore from repository secrets at build time.
+*.jks
+*.keystore
+signing.jks

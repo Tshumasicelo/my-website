@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#08090D</color>
+    <color name="surface">#12141C</color>
+    <color name="surface_hi">#1A1D28</color>
+    <color name="text">#F2F4F8</color>
+    <color name="muted">#8B93A2</color>
+    <color name="faint">#5A6070</color>
+    <color name="stroke">#1FFFFFFF</color>
+    <color name="scrim">#CC05060A</color>
+</resources>

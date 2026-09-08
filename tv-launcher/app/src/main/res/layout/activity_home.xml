@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <!-- Accent wash behind the header. Painted in code so it follows the
+         accent colour you pick in settings. -->
+    <View
+        android:id="@+id/glow"
+        android:layout_width="match_parent"
+        android:layout_height="360dp"
+        android:layout_gravity="top" />
+
+    <ScrollView
+        android:id="@+id/scroller"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/overscan_v"
+            android:paddingBottom="48dp">
+
+            <!-- ============ HEADER ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/overscan_h"
+                android:paddingEnd="@dimen/overscan_h">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/clock"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:includeFontPadding="false"
+                        android:textColor="@color/text"
+                        android:textSize="56sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/date"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:letterSpacing="0.06"
+                        android:textColor="@color/muted"
+                        android:textSize="15sp" />
+                </LinearLayout>
+
+                <!-- Status chips are inflated in code so rows that cannot be read
+                     on a given box (CPU temp, for instance) simply do not appear. -->
+                <LinearLayout
+                    android:id="@+id/chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="end|center_vertical"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- ============ ROWS ============ -->
+            <TextView android:id="@+id/titleFav" style="@style/RowTitle" android:text="@string/row_favourites" />
+            <androidx.recyclerview.widget.RecyclerView android:id="@+id/rowFav" style="@style/AppRow" />
+
+            <TextView android:id="@+id/titleTv" style="@style/RowTitle" android:text="@string/row_tv_apps" />
+            <androidx.recyclerview.widget.RecyclerView android:id="@+id/rowTv" style="@style/AppRow" />
+
+            <TextView android:id="@+id/titleAll" style="@style/RowTitle" android:text="@string/row_all_apps" />
+            <androidx.recyclerview.widget.RecyclerView android:id="@+id/rowAll" style="@style/AppRow" />
+
+            <TextView android:id="@+id/titleSys" style="@style/RowTitle" android:text="@string/row_system" />
+            <androidx.recyclerview.widget.RecyclerView android:id="@+id/rowSys" style="@style/AppRow" />
+
+            <TextView
+                android:id="@+id/empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="@dimen/overscan_h"
+                android:paddingEnd="@dimen/overscan_h"
+                android:paddingTop="40dp"
+                android:text="@string/no_apps"
+                android:textColor="@color/muted"
+                android:textSize="16sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

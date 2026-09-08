@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android TV's "overscan safe area": older panels physically crop the outer
+        5% of the picture, so nothing important may sit outside these margins.
+        At the 960x540dp TV design grid, 5% works out to exactly 48dp x 27dp.
+    -->
+    <dimen name="overscan_h">48dp</dimen>
+    <dimen name="overscan_v">27dp</dimen>
+
+    <dimen name="card_banner_w">232dp</dimen>
+    <dimen name="card_banner_h">130dp</dimen>
+    <dimen name="card_tile_w">150dp</dimen>
+    <dimen name="card_tile_h">130dp</dimen>
+    <dimen name="card_gap">14dp</dimen>
+    <dimen name="row_gap">10dp</dimen>
+    <dimen name="row_title_top">22dp</dimen>
+</resources>

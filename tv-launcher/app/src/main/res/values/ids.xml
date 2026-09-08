@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tag key used by IconLoader to detect a recycled ImageView. -->
+    <item name="icon_tag" type="id" />
+</resources>

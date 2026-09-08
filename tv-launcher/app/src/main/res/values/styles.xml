@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="RowTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">@dimen/overscan_h</item>
+        <item name="android:paddingEnd">@dimen/overscan_h</item>
+        <item name="android:paddingTop">@dimen/row_title_top</item>
+        <item name="android:paddingBottom">@dimen/row_gap</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/muted</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.14</item>
+    </style>
+
+    <!-- clipChildren=false is what lets a focused card scale up past the row
+         bounds instead of being sliced off at the edges. -->
+    <style name="AppRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">@dimen/overscan_h</item>
+        <item name="android:paddingEnd">@dimen/overscan_h</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:clipToPadding">false</item>
+        <item name="android:clipChildren">false</item>
+        <item name="android:focusable">false</item>
+    </style>
+</resources>
