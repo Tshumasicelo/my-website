@@ -544,6 +544,14 @@ class HomeActivity : Activity() {
             homePrompt.visibility = View.GONE
             return
         }
+        // Two independent mechanisms can land HOME here: being the registered
+        // default home app, or capturing the key with the guard service. Only one
+        // has to be true. Asking about the default alone left the prompt showing
+        // on TVs where the takeover was already doing the job.
+        if (HomeGuardService.isEnabled(this)) {
+            homePrompt.visibility = View.GONE
+            return
+        }
         val isDefault = runCatching {
             val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
             val resolved = packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
