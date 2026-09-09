@@ -11,7 +11,13 @@ data class AppEntry(
     val packageName: String,
     val activityName: String,
     val label: String,
-    val isTvApp: Boolean
+    val isTvApp: Boolean,
+    /**
+     * Shipped with the firmware rather than installed by the user. Kept as a flag
+     * instead of being dropped here, so these apps stay reachable through search
+     * even once the home rows stop showing them.
+     */
+    val preinstalled: Boolean
 ) {
     /** Stable identity for favourites and the icon cache. */
     val key: String get() = "$packageName/$activityName"
@@ -51,12 +57,26 @@ object AppRepository {
             if (activity.packageName == self) continue
             if (tvPackages.contains(activity.packageName)) continue
             if (!seen.add(activity.packageName)) continue
-            if (isPreinstalled(activity.applicationInfo)) continue
             other += toEntry(info, pm, false)
         }
 
         val byLabel = compareBy<AppEntry> { it.label.lowercase() }
         return AppCatalog(tv.sortedWith(byLabel), other.sortedWith(byLabel))
+    }
+
+    private fun toEntry(info: ResolveInfo, pm: PackageManager, isTvApp: Boolean): AppEntry {
+        val activity = info.activityInfo
+        val label = runCatching { info.loadLabel(pm).toString() }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: activity.packageName
+        return AppEntry(
+            packageName = activity.packageName,
+            activityName = activity.name,
+            label = label,
+            isTvApp = isTvApp,
+            preinstalled = isPreinstalled(activity.applicationInfo)
+        )
     }
 
     /**
@@ -69,15 +89,6 @@ object AppRepository {
         val system = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
         val updated = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
         return system && !updated
-    }
-
-    private fun toEntry(info: ResolveInfo, pm: PackageManager, isTvApp: Boolean): AppEntry {
-        val activity = info.activityInfo
-        val label = runCatching { info.loadLabel(pm).toString() }
-            .getOrNull()
-            ?.takeIf { it.isNotBlank() }
-            ?: activity.packageName
-        return AppEntry(activity.packageName, activity.name, label, isTvApp)
     }
 
     /** Explicit component, so the target's own intent filters never get in the way. */

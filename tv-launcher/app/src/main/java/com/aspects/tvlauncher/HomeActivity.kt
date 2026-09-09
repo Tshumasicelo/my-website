@@ -334,7 +334,11 @@ class HomeActivity : Activity() {
         tvRow.submit(catalog.tv.filterNot { hidden.contains(it.key) }.map { card(it) })
         allRow.submit(
             if (prefs.showSideloaded) {
-                catalog.other.filterNot { hidden.contains(it.key) }.map { card(it) }
+                // Firmware clutter is dropped here rather than in the repository,
+                // so search can still reach these apps.
+                catalog.other
+                    .filterNot { it.preinstalled || hidden.contains(it.key) }
+                    .map { card(it) }
             } else emptyList()
         )
         sysRow.submit(if (prefs.showSystemRow) systemTiles() else emptyList())
