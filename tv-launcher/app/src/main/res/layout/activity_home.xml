@@ -10,6 +10,21 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Your own picture, when you have set one. Sits over the Drive Mode. -->
+    <ImageView
+        android:id="@+id/wallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/wallpaperDim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
     <!-- The focused app's artwork, stretched from a 64x36 thumbnail so the
          upscale itself does the blurring. -->
     <ImageView

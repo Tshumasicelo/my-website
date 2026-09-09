@@ -12,6 +12,13 @@
     <!-- Only ever used to ask the tv-latest release what the newest build number is. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Only to list images for the wallpaper picker. Requested at the moment
+         you open it, never at install. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
     <!--
         Android 11 (API 30) introduced package visibility filtering: queryIntentActivities()
         silently returns an empty list for apps you have not declared an interest in.
@@ -74,6 +81,11 @@
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:exported="false"
             android:windowSoftInputMode="stateVisible|adjustResize" />
+
+        <activity
+            android:name=".WallpaperActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
 
         <activity
             android:name=".SettingsActivity"

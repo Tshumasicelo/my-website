@@ -53,6 +53,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_STATS, true)
         set(value) = sp.edit().putBoolean(KEY_STATS, value).apply()
 
+    /** Percent of the Drive Mode ground laid over your wallpaper, for legibility. */
+    var wallpaperDim: Int
+        get() = sp.getInt(KEY_WALLPAPER_DIM, 55)
+        set(value) = sp.edit().putInt(KEY_WALLPAPER_DIM, value.coerceIn(0, 85)).apply()
+
     var backdrop: Boolean
         get() = sp.getBoolean(KEY_BACKDROP, true)
         set(value) = sp.edit().putBoolean(KEY_BACKDROP, value).apply()
@@ -121,6 +126,7 @@ class Prefs(context: Context) {
         const val KEY_SIDELOADED = "show_sideloaded"
         const val KEY_SYSTEM_ROW = "show_system_row"
         const val KEY_STATS = "show_stats"
+        const val KEY_WALLPAPER_DIM = "wallpaper_dim"
         const val KEY_BACKDROP = "backdrop"
         const val KEY_IGNITION = "ignition"
         const val KEY_PARKED = "parked_minutes"

@@ -24,6 +24,22 @@
 
     <string name="settings_title">ASPECTS TV settings</string>
     <string name="drive_mode">Drive Mode</string>
+    <string name="wallpaper">Wallpaper</string>
+    <string name="wallpaper_hint">Use your own picture instead of the Drive Mode background.</string>
+    <string name="wallpaper_custom">Custom</string>
+    <string name="wallpaper_none">Drive Mode</string>
+    <string name="wallpaper_dim">Wallpaper dim</string>
+    <string name="wallpaper_dim_hint">How much of the Drive Mode colour sits over your picture. More dim, more readable.</string>
+    <string name="percent">%1$d%%</string>
+    <string name="wallpaper_scanning">Looking for pictures\u2026</string>
+    <string name="wallpaper_saving">Saving\u2026</string>
+    <string name="wallpaper_applied">Wallpaper applied</string>
+    <string name="wallpaper_cleared">Back to the Drive Mode background</string>
+    <string name="wallpaper_failed">That image could not be read. Try another.</string>
+    <string name="wallpaper_empty">No pictures found. Copy some to the TV or plug in a USB stick, then come back.</string>
+    <string name="wallpaper_permission">ASPECTS TV needs permission to see your pictures.</string>
+    <string name="wallpaper_denied">Permission denied, so there is nothing to list. You can still use the Drive Mode backgrounds.</string>
+
     <string name="backdrop">App backdrop</string>
     <string name="backdrop_hint">Fills the screen with the focused app\'s own artwork, blurred. It shows the app, not what you were watching \u2014 no launcher can see inside Netflix.</string>
     <string name="ignition">Ignition sequence on start-up</string>
@@ -72,6 +88,11 @@
     <plurals name="search_results">
         <item quantity="one">%d APP</item>
         <item quantity="other">%d APPS</item>
+    </plurals>
+
+    <plurals name="wallpaper_found">
+        <item quantity="one">%d picture</item>
+        <item quantity="other">%d pictures</item>
     </plurals>
 
     <plurals name="hidden_count">

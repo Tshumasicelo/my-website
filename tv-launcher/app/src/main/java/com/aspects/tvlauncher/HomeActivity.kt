@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
@@ -37,6 +38,8 @@ class HomeActivity : Activity() {
     private lateinit var art: Backdrop
 
     private lateinit var background: DriveBackgroundView
+    private lateinit var wallpaperView: ImageView
+    private lateinit var wallpaperDim: View
     private lateinit var backdrop: ImageView
     private lateinit var scrim: View
     private lateinit var scroller: ScrollView
@@ -67,6 +70,8 @@ class HomeActivity : Activity() {
     private var updateReady = false
     private var lastStats: Stats? = null
     private var pendingBackdrop: AppEntry? = null
+    private var wallpaperBitmap: Bitmap? = null
+    private var wallpaperStamp = -1L
 
     private val backdropRunnable = Runnable {
         val entry = pendingBackdrop ?: return@Runnable
@@ -98,6 +103,8 @@ class HomeActivity : Activity() {
         setContentView(R.layout.activity_home)
 
         background = findViewById(R.id.background)
+        wallpaperView = findViewById(R.id.wallpaper)
+        wallpaperDim = findViewById(R.id.wallpaperDim)
         backdrop = findViewById(R.id.backdrop)
         scrim = findViewById(R.id.scrim)
         scroller = findViewById(R.id.scroller)
@@ -134,6 +141,7 @@ class HomeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         applyModeIfChanged()
+        applyWallpaper()
         refreshApps()
         updateClock()
         updateHomePrompt()
@@ -213,6 +221,7 @@ class HomeActivity : Activity() {
         // Card backgrounds are baked when a holder is created, so the adapters
         // have to be rebuilt for a new Drive Mode to reach recycled views.
         clearBackdrop()
+        wallpaperStamp = -1L
         favRow.rebuild(); tvRow.rebuild(); allRow.rebuild(); sysRow.rebuild()
     }
 
@@ -378,6 +387,39 @@ class HomeActivity : Activity() {
         pendingBackdrop = null
         backdrop.animate().alpha(0f).setDuration(320L).start()
         scrim.animate().alpha(0f).setDuration(320L).start()
+    }
+
+    /**
+     * Decoding is skipped unless the file actually changed - onResume runs every
+     * time you come back from an app, and re-decoding a 1.8 MB bitmap each time
+     * would be a needless stall on this hardware.
+     */
+    private fun applyWallpaper() {
+        val stamp = Wallpaper.stamp(this)
+        val dim = ThemeKit.withAlpha(mode.ground, prefs.wallpaperDim / 100f)
+
+        if (stamp == wallpaperStamp) {
+            if (wallpaperBitmap != null) wallpaperDim.setBackgroundColor(dim)
+            return
+        }
+        wallpaperStamp = stamp
+
+        val previous = wallpaperBitmap
+        val next = if (stamp == 0L) null else Wallpaper.load(this)
+        wallpaperBitmap = next
+
+        if (next == null) {
+            wallpaperView.setImageDrawable(null)
+            wallpaperView.visibility = View.GONE
+            wallpaperDim.visibility = View.GONE
+        } else {
+            wallpaperView.setImageBitmap(next)
+            wallpaperView.visibility = View.VISIBLE
+            wallpaperDim.setBackgroundColor(dim)
+            wallpaperDim.visibility = View.VISIBLE
+        }
+        // Safe now: the view is already drawing the replacement.
+        previous?.recycle()
     }
 
     private fun refreshApps() {

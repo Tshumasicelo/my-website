@@ -19,6 +19,7 @@ class SettingsActivity : Activity() {
     private lateinit var container: LinearLayout
     private var mode = DriveMode.NIGHT
     private var guardEnabled = false
+    private var wallpaperSet = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +36,7 @@ class SettingsActivity : Activity() {
 
         container = findViewById(R.id.container)
         guardEnabled = HomeGuardService.isEnabled(this)
+        wallpaperSet = Wallpaper.exists(this)
         build()
         container.post { container.getChildAt(0)?.requestFocus() }
     }
@@ -43,8 +45,9 @@ class SettingsActivity : Activity() {
         super.onResume()
         // The user may have just switched the service on in Accessibility.
         val now = HomeGuardService.isEnabled(this)
-        if (now != guardEnabled) {
+        if (now != guardEnabled || wallpaperSet != Wallpaper.exists(this)) {
             guardEnabled = now
+            wallpaperSet = Wallpaper.exists(this)
             build()
         }
     }
@@ -67,6 +70,21 @@ class SettingsActivity : Activity() {
         addRow(R.drawable.ic_star, getString(R.string.drive_mode), mode.label, mode.blurb) {
             prefs.driveMode = DriveMode.next(prefs.driveMode)
             recreate()
+        }
+
+        addRow(
+            R.drawable.ic_display,
+            getString(R.string.wallpaper),
+            getString(
+                if (Wallpaper.exists(this)) R.string.wallpaper_custom else R.string.wallpaper_none
+            ),
+            getString(R.string.wallpaper_hint)
+        ) {
+            startActivity(Intent(this, WallpaperActivity::class.java))
+        }
+
+        if (Wallpaper.exists(this)) {
+            addDimCycler()
         }
 
         addToggle(
@@ -121,6 +139,24 @@ class SettingsActivity : Activity() {
     }
 
     // ------------------------------------------------------------------ rows
+
+    /** Steps the wallpaper dim through fixed levels; only shown when one is set. */
+    private fun addDimCycler() {
+        val row = inflateRow(
+            R.drawable.ic_tune,
+            getString(R.string.wallpaper_dim),
+            getString(R.string.percent, prefs.wallpaperDim),
+            getString(R.string.wallpaper_dim_hint)
+        )
+        val value = row.findViewById<TextView>(R.id.value)
+        row.setOnClickListener {
+            val at = DIM_STEPS.indexOf(prefs.wallpaperDim).let { if (it < 0) 0 else it }
+            val next = DIM_STEPS[(at + 1) % DIM_STEPS.size]
+            prefs.wallpaperDim = next
+            value.text = getString(R.string.percent, next)
+        }
+        container.addView(row)
+    }
 
     private fun addRow(
         glyphRes: Int,
@@ -283,5 +319,6 @@ class SettingsActivity : Activity() {
 
     private companion object {
         val PARKED_STEPS = intArrayOf(0, 15, 30, 60, 90)
+        val DIM_STEPS = intArrayOf(0, 25, 40, 55, 70, 85)
     }
 }
