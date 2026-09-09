@@ -24,6 +24,8 @@
 
     <string name="settings_title">ASPECTS TV settings</string>
     <string name="drive_mode">Drive Mode</string>
+    <string name="backdrop">App backdrop</string>
+    <string name="backdrop_hint">Fills the screen with the focused app\'s own artwork, blurred. It shows the app, not what you were watching \u2014 no launcher can see inside Netflix.</string>
     <string name="ignition">Ignition sequence on start-up</string>
     <string name="clock_24h">24-hour clock</string>
     <string name="clock_gauge">Show the dial clock</string>

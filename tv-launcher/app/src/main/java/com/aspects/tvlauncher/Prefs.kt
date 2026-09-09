@@ -53,6 +53,10 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_STATS, true)
         set(value) = sp.edit().putBoolean(KEY_STATS, value).apply()
 
+    var backdrop: Boolean
+        get() = sp.getBoolean(KEY_BACKDROP, true)
+        set(value) = sp.edit().putBoolean(KEY_BACKDROP, value).apply()
+
     var ignition: Boolean
         get() = sp.getBoolean(KEY_IGNITION, true)
         set(value) = sp.edit().putBoolean(KEY_IGNITION, value).apply()
@@ -117,6 +121,7 @@ class Prefs(context: Context) {
         const val KEY_SIDELOADED = "show_sideloaded"
         const val KEY_SYSTEM_ROW = "show_system_row"
         const val KEY_STATS = "show_stats"
+        const val KEY_BACKDROP = "backdrop"
         const val KEY_IGNITION = "ignition"
         const val KEY_PARKED = "parked_minutes"
         const val KEY_HOME_PROMPT = "home_prompt_dismissed"

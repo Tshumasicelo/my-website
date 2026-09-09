@@ -27,7 +27,8 @@ class CardAdapter(
     private val icons: IconLoader,
     private val mode: DriveMode,
     private val onClick: (CardItem, View) -> Unit,
-    private val onLongClick: (CardItem) -> Boolean
+    private val onLongClick: (CardItem) -> Boolean,
+    private val onFocus: (CardItem) -> Unit = {}
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var items: List<CardItem> = emptyList()
@@ -55,6 +56,7 @@ class CardAdapter(
         val item = items[position]
         holder.itemView.setOnClickListener { onClick(item, holder.itemView) }
         holder.itemView.setOnLongClickListener { onLongClick(item) }
+        attachFocus(holder.itemView, item)
         when (holder) {
             is WideHolder -> bindWide(holder, item)
             is TileHolder -> bindTile(holder, item)
@@ -104,10 +106,17 @@ class CardAdapter(
             view.outlineAmbientShadowColor = mode.glow
         }
 
+        view.findViewById<View?>(R.id.gloss)?.rotation = 14f
+        return view
+    }
+
+    /**
+     * Set at bind time rather than in decorate(), because the backdrop needs to
+     * know which app just took focus and a view only carries one focus listener.
+     */
+    private fun attachFocus(view: View, item: CardItem) {
         val lift = ThemeKit.dp(ctx, 14f).toFloat()
         val gloss = view.findViewById<View?>(R.id.gloss)
-        gloss?.rotation = 14f
-
         view.setOnFocusChangeListener { v, hasFocus ->
             v.animate()
                 .scaleX(if (hasFocus) FOCUS_SCALE else 1f)
@@ -115,9 +124,13 @@ class CardAdapter(
                 .setDuration(160L)
                 .start()
             v.elevation = if (hasFocus) lift else 0f
-            if (hasFocus) sweep(gloss, v.width) else gloss?.visibility = View.INVISIBLE
+            if (hasFocus) {
+                sweep(gloss, v.width)
+                onFocus(item)
+            } else {
+                gloss?.visibility = View.INVISIBLE
+            }
         }
-        return view
     }
 
     private fun sweep(gloss: View?, width: Int) {

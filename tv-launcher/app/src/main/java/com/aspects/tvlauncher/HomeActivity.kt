@@ -17,6 +17,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -33,8 +34,11 @@ class HomeActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private lateinit var icons: IconLoader
+    private lateinit var art: Backdrop
 
     private lateinit var background: DriveBackgroundView
+    private lateinit var backdrop: ImageView
+    private lateinit var scrim: View
     private lateinit var scroller: ScrollView
     private lateinit var content: LinearLayout
     private lateinit var clockView: TextView
@@ -62,6 +66,12 @@ class HomeActivity : Activity() {
     private var igniting = false
     private var updateReady = false
     private var lastStats: Stats? = null
+    private var pendingBackdrop: AppEntry? = null
+
+    private val backdropRunnable = Runnable {
+        val entry = pendingBackdrop ?: return@Runnable
+        art.load(entry) { showBackdrop(entry, it) }
+    }
 
     /** Ten seconds, not one: fewer wakeups matters on a passively cooled 1 GB box. */
     private val ticker = object : Runnable {
@@ -84,9 +94,12 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         icons = IconLoader(this)
+        art = Backdrop(this)
         setContentView(R.layout.activity_home)
 
         background = findViewById(R.id.background)
+        backdrop = findViewById(R.id.backdrop)
+        scrim = findViewById(R.id.scrim)
         scroller = findViewById(R.id.scroller)
         content = findViewById(R.id.content)
         clockView = findViewById(R.id.clock)
@@ -144,6 +157,7 @@ class HomeActivity : Activity() {
         gaugeRam.stopAnimation()
         gaugeDisk.stopAnimation()
         icons.shutdown()
+        art.shutdown()
         io.shutdownNow()
     }
 
@@ -198,6 +212,7 @@ class HomeActivity : Activity() {
 
         // Card backgrounds are baked when a holder is created, so the adapters
         // have to be rebuilt for a new Drive Mode to reach recycled views.
+        clearBackdrop()
         favRow.rebuild(); tvRow.rebuild(); allRow.rebuild(); sysRow.rebuild()
     }
 
@@ -294,7 +309,8 @@ class HomeActivity : Activity() {
             val next = CardAdapter(
                 this@HomeActivity, icons, mode,
                 this@HomeActivity::onCardClick,
-                this@HomeActivity::onCardLongClick
+                this@HomeActivity::onCardLongClick,
+                this@HomeActivity::onCardFocus
             )
             adapter = next
             list.adapter = next
@@ -313,6 +329,55 @@ class HomeActivity : Activity() {
             title.visibility = visibility
             list.visibility = visibility
         }
+    }
+
+    /**
+     * Focus moves faster than artwork loads while you hold a direction, so the
+     * load is deferred briefly and superseded by whatever you land on.
+     */
+    private fun onCardFocus(item: CardItem) {
+        ui.removeCallbacks(backdropRunnable)
+        val app = item.app
+        if (!prefs.backdrop || app == null) {
+            clearBackdrop()
+            return
+        }
+        pendingBackdrop = app
+        ui.postDelayed(backdropRunnable, BACKDROP_DELAY_MS)
+    }
+
+    private fun showBackdrop(entry: AppEntry, found: Backdrop.Art?) {
+        if (isFinishing || isDestroyed) return
+        if (pendingBackdrop?.key != entry.key) return
+        if (found == null) {
+            clearBackdrop()
+            return
+        }
+
+        backdrop.setImageBitmap(found.bitmap)
+
+        // Held well back from full strength: this sits under a clock and four
+        // rows of text, and legibility beats spectacle on a screen read from
+        // across a room.
+        val tinted =
+            if (found.tint == 0) mode.ground else ThemeKit.blend(mode.ground, found.tint, 0.34f)
+        scrim.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                ThemeKit.withAlpha(mode.ground, 0.74f),
+                ThemeKit.withAlpha(tinted, 0.66f),
+                ThemeKit.withAlpha(mode.ground, 0.93f)
+            )
+        )
+
+        backdrop.animate().alpha(1f).setDuration(380L).start()
+        scrim.animate().alpha(1f).setDuration(380L).start()
+    }
+
+    private fun clearBackdrop() {
+        pendingBackdrop = null
+        backdrop.animate().alpha(0f).setDuration(320L).start()
+        scrim.animate().alpha(0f).setDuration(320L).start()
     }
 
     private fun refreshApps() {
@@ -591,6 +656,7 @@ class HomeActivity : Activity() {
 
     private companion object {
         const val TICK_MS = 10_000L
+        const val BACKDROP_DELAY_MS = 220L
 
         const val TILE_SEARCH = "tile.search"
         const val TILE_THEME = "tile.theme"

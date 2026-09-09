@@ -69,6 +69,12 @@ class SettingsActivity : Activity() {
             recreate()
         }
 
+        addToggle(
+            R.drawable.ic_display, getString(R.string.backdrop),
+            getString(R.string.backdrop_hint), prefs.backdrop
+        ) {
+            prefs.backdrop = it
+        }
         addToggle(R.drawable.ic_signal, getString(R.string.ignition), null, prefs.ignition) {
             prefs.ignition = it
         }

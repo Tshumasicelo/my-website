@@ -10,6 +10,24 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- The focused app's artwork, stretched from a 64x36 thumbnail so the
+         upscale itself does the blurring. -->
+    <ImageView
+        android:id="@+id/backdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
+    <!-- Keeps the clock and rows readable over whatever the backdrop happens
+         to be, and carries the app's dominant colour. -->
+    <View
+        android:id="@+id/scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0" />
+
     <ScrollView
         android:id="@+id/scroller"
         android:layout_width="match_parent"
