@@ -1,6 +1,7 @@
 package com.aspects.tvlauncher
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -58,11 +59,7 @@ class SettingsActivity : Activity() {
             getString(if (guardEnabled) R.string.home_takeover_on else R.string.home_takeover_off),
             guardEnabled
         ) {
-            try {
-                startActivity(HomeGuardService.settingsIntent())
-            } catch (failed: Exception) {
-                Toast.makeText(this, R.string.cant_open, Toast.LENGTH_SHORT).show()
-            }
+            if (guardEnabled) offerTakeoverOptions() else openAccessibility()
         }
 
         // Cycling on OK beats a nested swatch strip: one button, no second focus
@@ -217,7 +214,41 @@ class SettingsActivity : Activity() {
         else getString(R.string.minutes, minutes)
 
     /** Opens the system home-app picker; we can only ever ask, never switch. */
+    /**
+     * Once the takeover is running, offer to stop it from here as well as from
+     * system Settings. A service can disable itself, so this remains a way out
+     * even if something has made the Settings app hard to reach.
+     */
+    private fun offerTakeoverOptions() {
+        val choices = arrayOf(
+            getString(R.string.home_takeover_disable),
+            getString(R.string.home_takeover_open)
+        )
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(R.string.home_takeover)
+            .setItems(choices) { _, which ->
+                if (which == 0 && HomeGuardService.stopTakeover()) {
+                    guardEnabled = false
+                    build()
+                    Toast.makeText(this, R.string.home_takeover_stopped, Toast.LENGTH_LONG).show()
+                } else {
+                    openAccessibility()
+                }
+            }
+            .show()
+    }
+
+    private fun openAccessibility() {
+        HomeGuardService.expectExternalLaunch()
+        try {
+            startActivity(HomeGuardService.settingsIntent())
+        } catch (failed: Exception) {
+            Toast.makeText(this, R.string.cant_open, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun openHomePicker() {
+        HomeGuardService.expectExternalLaunch()
         val intent = Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             startActivity(intent)

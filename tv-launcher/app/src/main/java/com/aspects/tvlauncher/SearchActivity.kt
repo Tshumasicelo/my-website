@@ -97,6 +97,7 @@ class SearchActivity : Activity() {
 
     private fun open(item: CardItem, from: View) {
         val app = item.app ?: return
+        HomeGuardService.expectExternalLaunch()
         val options = runCatching {
             ActivityOptions.makeScaleUpAnimation(from, 0, 0, from.width, from.height).toBundle()
         }.getOrNull()

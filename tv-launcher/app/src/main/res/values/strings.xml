@@ -16,6 +16,9 @@
     <string name="home_guard_label">ASPECTS TV home button</string>
     <string name="home_guard_description">Lets ASPECTS TV answer the HOME key on televisions that wire it straight to the built-in launcher. It only ever sees which app opened a window \u2014 it cannot read what is on screen.</string>
     <string name="home_takeover">HOME button takeover</string>
+    <string name="home_takeover_disable">Turn it off now</string>
+    <string name="home_takeover_open">Open Accessibility settings</string>
+    <string name="home_takeover_stopped">HOME takeover turned off. The HOME key goes back to your TV\'s own launcher.</string>
     <string name="home_takeover_on">Active. The HOME key returns here.</string>
     <string name="home_takeover_off">Your TV wires HOME to its own launcher. Press to enable ASPECTS TV under Accessibility, then HOME will come back here.</string>
 

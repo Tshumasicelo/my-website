@@ -390,6 +390,7 @@ class HomeActivity : Activity() {
 
     /** The app grows out of the tile you selected rather than cutting to it. */
     private fun launchApp(intent: Intent, from: View) {
+        HomeGuardService.expectExternalLaunch()
         val options = runCatching {
             ActivityOptions.makeScaleUpAnimation(from, 0, 0, from.width, from.height).toBundle()
         }.getOrNull()
@@ -454,6 +455,9 @@ class HomeActivity : Activity() {
      * intent is not filtered, so we try it and fall back.
      */
     private fun launchSettings(action: String) {
+        // Without this the guard service would see Settings open and bounce us
+        // straight back here.
+        HomeGuardService.expectExternalLaunch()
         val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             startActivity(intent)
@@ -469,6 +473,7 @@ class HomeActivity : Activity() {
     }
 
     private fun launch(intent: Intent) {
+        HomeGuardService.expectExternalLaunch()
         try {
             startActivity(intent)
         } catch (failed: Exception) {
