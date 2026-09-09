@@ -1,30 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card"
     android:layout_width="@dimen/card_tile_w"
     android:layout_height="@dimen/card_tile_h"
     android:layout_marginEnd="@dimen/card_gap"
     android:clickable="true"
-    android:focusable="true"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="12dp">
+    android:focusable="true">
 
-    <ImageView
-        android:id="@+id/icon"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
-        android:contentDescription="@null"
-        android:scaleType="fitCenter" />
-
-    <TextView
-        android:id="@+id/label"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:ellipsize="end"
+        android:layout_height="match_parent"
         android:gravity="center"
-        android:maxLines="2"
-        android:textColor="@color/text"
-        android:textSize="14sp" />
-</LinearLayout>
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <ImageView
+            android:id="@+id/icon"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            android:id="@+id/label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="2"
+            android:textColor="#F2F4F8"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <View
+        android:id="@+id/gloss"
+        android:layout_width="46dp"
+        android:layout_height="260dp"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/gloss"
+        android:visibility="invisible" />
+</FrameLayout>

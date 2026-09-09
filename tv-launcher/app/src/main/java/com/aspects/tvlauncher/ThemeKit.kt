@@ -9,33 +9,16 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewOutlineProvider
 
-/** One accent colour the launcher can be themed with. */
-data class Accent(val name: String, val color: Int)
-
-object Accents {
-    val ALL = listOf(
-        Accent("Indigo", 0xFF5B4BFF.toInt()),
-        Accent("Cyan", 0xFF00E5C0.toInt()),
-        Accent("Amber", 0xFFFFB020.toInt()),
-        Accent("Rose", 0xFFFF4D8D.toInt()),
-        Accent("Green", 0xFF22C55E.toInt()),
-        Accent("Ice", 0xFF7DD3FC.toInt())
-    )
-
-    fun at(index: Int): Accent = ALL[index.coerceIn(0, ALL.size - 1)]
-
-    fun next(index: Int): Int = (index + 1) % ALL.size
-}
-
 /**
- * Every themed surface is built in code rather than in XML, because the accent
- * colour is a runtime setting and a static selector drawable cannot follow it.
+ * Surfaces are built in code because the Drive Mode is a runtime setting, and a
+ * static selector drawable cannot follow it. Everything here is translucent: the
+ * painted background is the point, so cards behave like glass over it rather
+ * than opaque panels sitting on top.
  */
 object ThemeKit {
 
-    private const val SURFACE = 0xFF12141C.toInt()
-    private const val SURFACE_HI = 0xFF1A1D28.toInt()
-    private const val HAIRLINE = 0x1FFFFFFF
+    private const val HAIRLINE = 0x1AFFFFFF
+    private const val GLASS = 0x0EFFFFFF
 
     fun dp(ctx: Context, value: Float): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, value, ctx.resources.displayMetrics
@@ -46,15 +29,6 @@ object ThemeKit {
         Color.red(color), Color.green(color), Color.blue(color)
     )
 
-    private fun blend(base: Int, overlay: Int, ratio: Float): Int {
-        val inv = 1f - ratio
-        return Color.rgb(
-            (Color.red(base) * inv + Color.red(overlay) * ratio).toInt(),
-            (Color.green(base) * inv + Color.green(overlay) * ratio).toInt(),
-            (Color.blue(base) * inv + Color.blue(overlay) * ratio).toInt()
-        )
-    }
-
     private fun rounded(fill: Int, strokeColor: Int, strokeWidth: Int, radius: Float) =
         GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -64,14 +38,15 @@ object ThemeKit {
         }
 
     /**
-     * A fresh selector per view on purpose: a single StateListDrawable instance
-     * shared across cards would light every card up at once, because drawable
-     * state is per-instance.
+     * A fresh selector per view on purpose: one shared StateListDrawable would
+     * light every card at once, because drawable state is per instance.
      */
-    fun cardSelector(ctx: Context, accent: Int, radiusDp: Float = 14f): StateListDrawable {
+    fun cardSelector(ctx: Context, mode: DriveMode, radiusDp: Float = 14f): StateListDrawable {
         val r = dp(ctx, radiusDp).toFloat()
-        val focused = rounded(blend(SURFACE_HI, accent, 0.16f), accent, dp(ctx, 3f), r)
-        val idle = rounded(SURFACE, HAIRLINE, dp(ctx, 1f), r)
+        val focused = rounded(
+            withAlpha(mode.glow, 0.14f), mode.glow, dp(ctx, 3f), r
+        )
+        val idle = rounded(GLASS, HAIRLINE, dp(ctx, 1f), r)
         return StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_focused), focused)
             addState(IntArray(0), idle)
@@ -79,11 +54,14 @@ object ThemeKit {
     }
 
     fun chip(ctx: Context): GradientDrawable =
-        rounded(0xFF11131A.toInt(), HAIRLINE, dp(ctx, 1f), dp(ctx, 22f).toFloat())
+        rounded(0x33000000, HAIRLINE, dp(ctx, 1f), dp(ctx, 22f).toFloat())
 
-    fun headerGlow(accent: Int): GradientDrawable = GradientDrawable(
+    fun panel(ctx: Context, mode: DriveMode): GradientDrawable =
+        rounded(withAlpha(mode.accent, 0.16f), withAlpha(mode.accent, 0.55f), dp(ctx, 1f), dp(ctx, 12f).toFloat())
+
+    fun scrim(mode: DriveMode): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(withAlpha(accent, 0.22f), withAlpha(accent, 0.06f), Color.TRANSPARENT)
+        intArrayOf(withAlpha(mode.ground, 0.86f), withAlpha(mode.ground, 0.55f))
     )
 
     fun roundedOutline(ctx: Context, radiusDp: Float): ViewOutlineProvider =

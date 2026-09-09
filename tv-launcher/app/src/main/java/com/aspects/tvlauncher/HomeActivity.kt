@@ -1,21 +1,22 @@
 package com.aspects.tvlauncher
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
-import android.widget.ImageView
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -23,6 +24,7 @@ import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -32,12 +34,20 @@ class HomeActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var icons: IconLoader
 
+    private lateinit var background: DriveBackgroundView
     private lateinit var scroller: ScrollView
-    private lateinit var glow: View
+    private lateinit var content: LinearLayout
     private lateinit var clockView: TextView
+    private lateinit var clockGauge: ClockGaugeView
     private lateinit var dateView: TextView
-    private lateinit var chips: LinearLayout
+    private lateinit var statusView: TextView
     private lateinit var emptyView: TextView
+    private lateinit var gaugeRam: GaugeView
+    private lateinit var gaugeDisk: GaugeView
+    private lateinit var bloom: View
+    private lateinit var parked: View
+    private lateinit var parkedClock: TextView
+    private lateinit var homePrompt: LinearLayout
 
     private lateinit var favRow: Row
     private lateinit var tvRow: Row
@@ -47,21 +57,28 @@ class HomeActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
 
-    private var accent = Accents.at(0).color
-    private var builtAccent = -1
+    private var mode = DriveMode.NIGHT
+    private var builtMode = -1
+    private var igniting = false
+    private var updateReady = false
+    private var lastStats: Stats? = null
 
     /** Ten seconds, not one: fewer wakeups matters on a passively cooled 1 GB box. */
     private val ticker = object : Runnable {
         override fun run() {
             updateClock()
-            if (prefs.showStats) refreshStats() else chips.removeAllViews()
+            if (prefs.showStats) refreshStats()
             ui.postDelayed(this, TICK_MS)
         }
     }
 
+    private val parkRunnable = Runnable { enterParked() }
+
     private val packageWatcher = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = refreshApps()
     }
+
+    // ------------------------------------------------------------- lifecycle
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,43 +86,76 @@ class HomeActivity : Activity() {
         icons = IconLoader(this)
         setContentView(R.layout.activity_home)
 
+        background = findViewById(R.id.background)
         scroller = findViewById(R.id.scroller)
-        glow = findViewById(R.id.glow)
+        content = findViewById(R.id.content)
         clockView = findViewById(R.id.clock)
+        clockGauge = findViewById(R.id.clockGauge)
         dateView = findViewById(R.id.date)
-        chips = findViewById(R.id.chips)
+        statusView = findViewById(R.id.status)
         emptyView = findViewById(R.id.empty)
+        gaugeRam = findViewById(R.id.gaugeRam)
+        gaugeDisk = findViewById(R.id.gaugeDisk)
+        bloom = findViewById(R.id.bloom)
+        parked = findViewById(R.id.parked)
+        parkedClock = findViewById(R.id.parkedClock)
+        homePrompt = findViewById(R.id.homePrompt)
 
         favRow = Row(findViewById(R.id.titleFav), findViewById(R.id.rowFav))
         tvRow = Row(findViewById(R.id.titleTv), findViewById(R.id.rowTv))
         allRow = Row(findViewById(R.id.titleAll), findViewById(R.id.rowAll))
         sysRow = Row(findViewById(R.id.titleSys), findViewById(R.id.rowSys))
+
+        homePrompt.setOnClickListener { launchSettings(Settings.ACTION_HOME_SETTINGS) }
+        homePrompt.setOnLongClickListener {
+            prefs.homePromptDismissed = true
+            homePrompt.visibility = View.GONE
+            true
+        }
+
+        applyModeIfChanged()
+        if (prefs.ignition) startIgnition()
+        checkForUpdate()
     }
 
     override fun onResume() {
         super.onResume()
-        applyAccentIfChanged()
+        applyModeIfChanged()
         refreshApps()
         updateClock()
+        updateHomePrompt()
         ui.removeCallbacks(ticker)
         ui.post(ticker)
         registerPackageWatcher()
+        schedulePark()
     }
 
     override fun onPause() {
         super.onPause()
         ui.removeCallbacks(ticker)
+        ui.removeCallbacks(parkRunnable)
+        leaveParked()
         runCatching { unregisterReceiver(packageWatcher) }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         ui.removeCallbacksAndMessages(null)
+        gaugeRam.stopAnimation()
+        gaugeDisk.stopAnimation()
         icons.shutdown()
         io.shutdownNow()
     }
 
-    /** A home screen has nowhere to go Back to, so Back just returns you to the top. */
+    /** Fires on every key press and touch: our skip button and our idle reset. */
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        if (igniting) finishIgnition()
+        if (parked.visibility == View.VISIBLE) leaveParked()
+        schedulePark()
+    }
+
+    /** A home screen has nowhere to go Back to, so Back returns you to the top. */
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         scroller.smoothScrollTo(0, 0)
@@ -113,17 +163,116 @@ class HomeActivity : Activity() {
 
     // ---------------------------------------------------------------- theming
 
-    private fun applyAccentIfChanged() {
-        if (builtAccent == prefs.accent) return
-        builtAccent = prefs.accent
-        accent = Accents.at(builtAccent).color
-        glow.background = ThemeKit.headerGlow(accent)
+    private fun applyModeIfChanged() {
+        if (builtMode == prefs.driveMode) return
+        builtMode = prefs.driveMode
+        mode = DriveMode.byIndex(builtMode)
+
+        background.mode = mode
+        window.setBackgroundDrawable(GradientDrawable().apply { setColor(mode.ground) })
+
+        clockView.setTextColor(mode.ink)
+        parkedClock.setTextColor(mode.ink)
+        dateView.setTextColor(mode.dim)
+        statusView.setTextColor(mode.dim)
+        emptyView.setTextColor(mode.dim)
+
+        listOf(gaugeRam, gaugeDisk).forEach {
+            it.glow = mode.glow
+            it.accent = mode.accent
+            it.dim = mode.dim
+        }
+        clockGauge.glow = mode.glow
+        clockGauge.accent = mode.accent
+        clockGauge.dim = mode.dim
+
+        gaugeRam.label = getString(R.string.gauge_ram)
+        gaugeDisk.label = getString(R.string.gauge_disk)
+
+        homePrompt.background = ThemeKit.panel(this, mode)
+        parked.setBackgroundColor(ThemeKit.withAlpha(mode.ground, 0.94f))
+
+        listOf(R.id.titleFav, R.id.titleTv, R.id.titleAll, R.id.titleSys).forEach {
+            findViewById<TextView>(it).setTextColor(mode.dim)
+        }
+
         // Card backgrounds are baked when a holder is created, so the adapters
-        // have to be rebuilt for a new accent to reach already-recycled views.
-        favRow.rebuild()
-        tvRow.rebuild()
-        allRow.rebuild()
-        sysRow.rebuild()
+        // have to be rebuilt for a new Drive Mode to reach recycled views.
+        favRow.rebuild(); tvRow.rebuild(); allRow.rebuild(); sysRow.rebuild()
+    }
+
+    // -------------------------------------------------------------- ignition
+
+    private fun startIgnition() {
+        igniting = true
+        content.alpha = 0f
+        content.translationY = ThemeKit.dp(this, 22f).toFloat()
+
+        bloom.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                ThemeKit.withAlpha(mode.glow, 0f),
+                ThemeKit.withAlpha(mode.glow, 0.10f),
+                ThemeKit.withAlpha(mode.glow, 0.80f)
+            )
+        )
+        bloom.alpha = 0f
+        bloom.visibility = View.VISIBLE
+
+        ui.postDelayed({ if (igniting) { gaugeRam.sweep(); gaugeDisk.sweep() } }, 220L)
+        ui.postDelayed({
+            if (!igniting) return@postDelayed
+            bloom.animate().alpha(0.9f).setDuration(240L).withEndAction {
+                bloom.animate().alpha(0f).setDuration(520L).start()
+            }.start()
+        }, 300L)
+        ui.postDelayed({
+            if (!igniting) return@postDelayed
+            content.animate().alpha(1f).translationY(0f).setDuration(560L).start()
+        }, 680L)
+        ui.postDelayed({ if (igniting) finishIgnition() }, 1500L)
+    }
+
+    private fun finishIgnition() {
+        igniting = false
+        content.animate().cancel()
+        bloom.animate().cancel()
+        content.alpha = 1f
+        content.translationY = 0f
+        bloom.alpha = 0f
+        bloom.visibility = View.GONE
+    }
+
+    // ------------------------------------------------------------ parked mode
+
+    private fun schedulePark() {
+        ui.removeCallbacks(parkRunnable)
+        val minutes = prefs.parkedMinutes
+        if (minutes > 0) ui.postDelayed(parkRunnable, minutes * 60_000L)
+    }
+
+    private fun enterParked() {
+        if (isFinishing || isDestroyed) return
+        updateClock()
+        parked.visibility = View.VISIBLE
+        parked.alpha = 0f
+        parked.animate().alpha(1f).setDuration(900L).start()
+        setBrightness(0.05f)
+    }
+
+    private fun leaveParked() {
+        if (parked.visibility != View.VISIBLE) return
+        parked.animate().cancel()
+        parked.visibility = View.GONE
+        setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+    }
+
+    private fun setBrightness(value: Float) {
+        runCatching {
+            val attrs = window.attributes
+            attrs.screenBrightness = value
+            window.attributes = attrs
+        }
     }
 
     // ------------------------------------------------------------------ rows
@@ -143,9 +292,7 @@ class HomeActivity : Activity() {
 
         fun rebuild() {
             val next = CardAdapter(
-                this@HomeActivity,
-                icons,
-                accent,
+                this@HomeActivity, icons, mode,
                 this@HomeActivity::onCardClick,
                 this@HomeActivity::onCardLongClick
             )
@@ -177,12 +324,18 @@ class HomeActivity : Activity() {
 
     private fun render(catalog: AppCatalog) {
         val favourites = prefs.favourites
+        val hidden = prefs.hidden
         val everything = catalog.tv + catalog.other
+        val byKey = everything.associateBy { it.key }
 
-        favRow.submit(everything.filter { favourites.contains(it.key) }.map { card(it) })
-        tvRow.submit(catalog.tv.map { card(it) })
+        // favourites keep the order you pinned them in
+        favRow.submit(favourites.mapNotNull { byKey[it] }.map { card(it) })
+
+        tvRow.submit(catalog.tv.filterNot { hidden.contains(it.key) }.map { card(it) })
         allRow.submit(
-            if (prefs.showSideloaded) catalog.other.map { card(it) } else emptyList()
+            if (prefs.showSideloaded) {
+                catalog.other.filterNot { hidden.contains(it.key) }.map { card(it) }
+            } else emptyList()
         )
         sysRow.submit(if (prefs.showSystemRow) systemTiles() else emptyList())
 
@@ -194,6 +347,7 @@ class HomeActivity : Activity() {
         CardItem(entry.key, entry.label, entry, R.drawable.ic_app_placeholder, entry.isTvApp)
 
     private fun systemTiles(): List<CardItem> = listOf(
+        tile(TILE_SEARCH, R.string.tile_search, R.drawable.ic_search),
         tile(TILE_THEME, R.string.tile_launcher, R.drawable.ic_tune),
         tile(TILE_HOME, R.string.tile_home, R.drawable.ic_home),
         tile(TILE_SETTINGS, R.string.tile_settings, R.drawable.ic_settings),
@@ -210,13 +364,14 @@ class HomeActivity : Activity() {
 
     // --------------------------------------------------------------- actions
 
-    private fun onCardClick(item: CardItem) {
+    private fun onCardClick(item: CardItem, from: View) {
         val app = item.app
         if (app != null) {
-            launch(AppRepository.launchIntent(app))
+            launchApp(AppRepository.launchIntent(app), from)
             return
         }
         when (item.id) {
+            TILE_SEARCH -> launch(Intent(this, SearchActivity::class.java))
             TILE_THEME -> launch(Intent(this, SettingsActivity::class.java))
             TILE_HOME -> launchSettings(Settings.ACTION_HOME_SETTINGS)
             TILE_SETTINGS -> launchSettings(Settings.ACTION_SETTINGS)
@@ -229,44 +384,70 @@ class HomeActivity : Activity() {
         }
     }
 
+    /** The app grows out of the tile you selected rather than cutting to it. */
+    private fun launchApp(intent: Intent, from: View) {
+        val options = runCatching {
+            ActivityOptions.makeScaleUpAnimation(from, 0, 0, from.width, from.height).toBundle()
+        }.getOrNull()
+        try {
+            startActivity(intent, options)
+        } catch (failed: Exception) {
+            launch(intent)
+        }
+    }
+
     private fun onCardLongClick(item: CardItem): Boolean {
         val app = item.app ?: return false
         val pinned = prefs.favourites.contains(app.key)
-        val actions = arrayOf(
-            getString(R.string.action_open),
-            getString(if (pinned) R.string.action_unpin else R.string.action_pin),
-            getString(R.string.action_info),
-            getString(R.string.action_uninstall)
-        )
+
+        val labels = ArrayList<String>()
+        val actions = ArrayList<() -> Unit>()
+
+        labels.add(getString(R.string.action_open))
+        actions.add { launch(AppRepository.launchIntent(app)) }
+
+        labels.add(getString(if (pinned) R.string.action_unpin else R.string.action_pin))
+        actions.add { prefs.toggleFavourite(app.key); refreshApps() }
+
+        if (pinned) {
+            labels.add(getString(R.string.action_move_left))
+            actions.add { prefs.moveFavourite(app.key, -1); refreshApps() }
+            labels.add(getString(R.string.action_move_right))
+            actions.add { prefs.moveFavourite(app.key, 1); refreshApps() }
+        }
+
+        labels.add(getString(R.string.action_hide))
+        actions.add { prefs.toggleHidden(app.key); refreshApps() }
+
+        labels.add(getString(R.string.action_info))
+        actions.add {
+            launch(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + app.packageName)
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+
+        labels.add(getString(R.string.action_uninstall))
+        actions.add {
+            launch(
+                Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+
         AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
             .setTitle(app.label)
-            .setItems(actions) { _, which ->
-                when (which) {
-                    0 -> launch(AppRepository.launchIntent(app))
-                    1 -> {
-                        prefs.toggleFavourite(app.key)
-                        refreshApps()
-                    }
-                    2 -> launch(
-                        Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.parse("package:" + app.packageName)
-                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                    3 -> launch(
-                        Intent(Intent.ACTION_DELETE, Uri.parse("package:" + app.packageName))
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                }
-            }
+            .setItems(labels.toTypedArray()) { _, which -> actions[which].invoke() }
             .show()
         return true
     }
 
     /**
-     * Never uses resolveActivity() first: on Android 11 that is filtered by package
-     * visibility and would report the Settings app as missing. Starting the intent
-     * is not filtered, so we simply try it and fall back.
+     * Never calls resolveActivity() first: on Android 11 that is filtered by
+     * package visibility and would report Settings as missing. Starting an
+     * intent is not filtered, so we try it and fall back.
      */
     private fun launchSettings(action: String) {
         val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -299,75 +480,79 @@ class HomeActivity : Activity() {
     private fun updateClock() {
         val now = Date()
         val pattern = if (prefs.clock24h) "HH:mm" else "h:mm a"
-        clockView.text = SimpleDateFormat(pattern, Locale.getDefault()).format(now)
+        val time = SimpleDateFormat(pattern, Locale.getDefault()).format(now)
+        clockView.text = time
+        parkedClock.text = time
         dateView.text = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
             .format(now)
             .uppercase(Locale.getDefault())
+
+        if (prefs.clockGauge) {
+            clockGauge.visibility = View.VISIBLE
+            clockGauge.setTime(Calendar.getInstance())
+        } else {
+            clockGauge.visibility = View.GONE
+        }
     }
 
     private fun refreshStats() {
         io.execute {
             val stats = runCatching { SystemStats.read(this) }.getOrNull() ?: return@execute
-            ui.post { if (!isFinishing && !isDestroyed) renderChips(stats) }
+            ui.post { if (!isFinishing && !isDestroyed) renderCluster(stats) }
         }
     }
 
-    private fun renderChips(stats: Stats) {
-        chips.removeAllViews()
-        if (!prefs.showStats) return
+    private fun renderCluster(stats: Stats) {
+        lastStats = stats
+        val show = prefs.showStats
+        findViewById<View>(R.id.cluster).visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) return
 
-        addChip(R.drawable.ic_signal, stats.ip?.let { "${stats.network}  $it" } ?: stats.network)
         if (stats.ramTotalMb > 0L) {
-            addChip(R.drawable.ic_memory, "${stats.ramUsedMb} / ${stats.ramTotalMb} MB")
+            gaugeRam.reading = stats.ramUsedMb.toString()
+            gaugeRam.setValue(stats.ramUsedMb.toFloat() / stats.ramTotalMb.toFloat(), !igniting)
         }
         if (stats.storageTotalGb > 0.0) {
-            addChip(
-                R.drawable.ic_storage,
-                String.format(Locale.US, "%.1f GB free", stats.storageFreeGb)
-            )
+            val used = stats.storageTotalGb - stats.storageFreeGb
+            gaugeDisk.reading = String.format(Locale.US, "%.0fG", stats.storageFreeGb)
+            gaugeDisk.setValue((used / stats.storageTotalGb).toFloat(), !igniting)
         }
-        stats.cpuTempC?.let {
-            addChip(R.drawable.ic_thermo, String.format(Locale.US, "%.0f°C", it))
-        }
-        addChip(R.drawable.ic_clock, "up " + stats.uptime)
+
+        val parts = ArrayList<String>()
+        parts.add(stats.network)
+        stats.ip?.let { parts.add(it) }
+        stats.cpuTempC?.let { parts.add(String.format(Locale.US, "%.0f°C", it)) }
+        parts.add(getString(R.string.up_for, stats.uptime))
+        if (updateReady) parts.add(getString(R.string.update_ready))
+        statusView.text = parts.joinToString("  ·  ")
+        statusView.setTextColor(if (updateReady) mode.accent else mode.dim)
     }
 
-    private fun addChip(glyphRes: Int, value: String) {
-        val padH = ThemeKit.dp(this, 14f)
-        val padV = ThemeKit.dp(this, 8f)
+    // ------------------------------------------------------------ housekeeping
 
-        val pill = LinearLayout(this)
-        pill.orientation = LinearLayout.HORIZONTAL
-        pill.gravity = Gravity.CENTER_VERTICAL
-        pill.background = ThemeKit.chip(this)
-        pill.setPadding(padH, padV, padH, padV)
-        val pillParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        pillParams.marginStart = ThemeKit.dp(this, 10f)
-        pill.layoutParams = pillParams
+    private fun updateHomePrompt() {
+        if (prefs.homePromptDismissed) {
+            homePrompt.visibility = View.GONE
+            return
+        }
+        val isDefault = runCatching {
+            val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolved = packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
+            resolved?.activityInfo?.packageName == packageName
+        }.getOrDefault(true)
+        homePrompt.visibility = if (isDefault) View.GONE else View.VISIBLE
+    }
 
-        val glyphSize = ThemeKit.dp(this, 15f)
-        val glyph = ImageView(this)
-        glyph.setImageResource(glyphRes)
-        glyph.setColorFilter(accent)
-        glyph.layoutParams = LinearLayout.LayoutParams(glyphSize, glyphSize)
-
-        val label = TextView(this)
-        label.setText(value)
-        label.setTextColor(0xFFCBD2DE.toInt())
-        label.textSize = 13f
-        val labelParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        labelParams.marginStart = ThemeKit.dp(this, 8f)
-        label.layoutParams = labelParams
-
-        pill.addView(glyph)
-        pill.addView(label)
-        chips.addView(pill)
+    private fun checkForUpdate() {
+        io.execute {
+            val latest = UpdateChecker.latestVersionCode() ?: return@execute
+            if (latest <= BuildConfig.VERSION_CODE) return@execute
+            ui.post {
+                if (isFinishing || isDestroyed) return@post
+                updateReady = true
+                lastStats?.let { renderCluster(it) }
+            }
+        }
     }
 
     private fun registerPackageWatcher() {
@@ -390,6 +575,7 @@ class HomeActivity : Activity() {
     private companion object {
         const val TICK_MS = 10_000L
 
+        const val TILE_SEARCH = "tile.search"
         const val TILE_THEME = "tile.theme"
         const val TILE_HOME = "tile.home"
         const val TILE_SETTINGS = "tile.settings"

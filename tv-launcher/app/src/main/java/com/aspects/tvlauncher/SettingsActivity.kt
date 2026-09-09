@@ -16,18 +16,22 @@ class SettingsActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private lateinit var container: LinearLayout
-    private var accent = Accents.at(0).color
+    private var mode = DriveMode.NIGHT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        accent = Accents.at(prefs.accent).color
+        mode = prefs.mode
         setContentView(R.layout.activity_settings)
 
-        findViewById<View>(R.id.glow).background = ThemeKit.headerGlow(accent)
-        container = findViewById(R.id.container)
-        findViewById<TextView>(R.id.about).text = about()
+        findViewById<DriveBackgroundView>(R.id.background).mode = mode
+        findViewById<TextView>(R.id.heading).setTextColor(mode.ink)
 
+        val about = findViewById<TextView>(R.id.about)
+        about.setTextColor(mode.dim)
+        about.text = about()
+
+        container = findViewById(R.id.container)
         build()
         container.post { container.getChildAt(0)?.requestFocus() }
     }
@@ -35,37 +39,68 @@ class SettingsActivity : Activity() {
     private fun build() {
         container.removeAllViews()
 
-        // Cycling through accents on OK beats a nested swatch strip: one button,
-        // no second focus axis to get lost in with a D-pad.
-        addRow(
-            R.drawable.ic_star,
-            getString(R.string.accent_colour),
-            Accents.at(prefs.accent).name
-        ) {
-            prefs.accent = Accents.next(prefs.accent)
+        // Cycling on OK beats a nested swatch strip: one button, no second focus
+        // axis to get lost in with a D-pad.
+        addRow(R.drawable.ic_star, getString(R.string.drive_mode), mode.label, mode.blurb) {
+            prefs.driveMode = DriveMode.next(prefs.driveMode)
             recreate()
         }
 
-        addToggle(R.drawable.ic_clock, getString(R.string.clock_24h), prefs.clock24h) {
+        addToggle(R.drawable.ic_signal, getString(R.string.ignition), null, prefs.ignition) {
+            prefs.ignition = it
+        }
+        addToggle(R.drawable.ic_clock, getString(R.string.clock_24h), null, prefs.clock24h) {
             prefs.clock24h = it
         }
-        addToggle(R.drawable.ic_apps, getString(R.string.show_sideloaded), prefs.showSideloaded) {
-            prefs.showSideloaded = it
+        addToggle(R.drawable.ic_clock, getString(R.string.clock_gauge), null, prefs.clockGauge) {
+            prefs.clockGauge = it
         }
-        addToggle(R.drawable.ic_tune, getString(R.string.show_system_row), prefs.showSystemRow) {
-            prefs.showSystemRow = it
-        }
-        addToggle(R.drawable.ic_memory, getString(R.string.show_stats), prefs.showStats) {
+        addToggle(R.drawable.ic_memory, getString(R.string.show_stats), null, prefs.showStats) {
             prefs.showStats = it
         }
+        addToggle(R.drawable.ic_apps, getString(R.string.show_sideloaded), null, prefs.showSideloaded) {
+            prefs.showSideloaded = it
+        }
+        addToggle(R.drawable.ic_tune, getString(R.string.show_system_row), null, prefs.showSystemRow) {
+            prefs.showSystemRow = it
+        }
 
-        addRow(R.drawable.ic_home, getString(R.string.set_default_home), "") {
+        addCycler(
+            R.drawable.ic_display, getString(R.string.parked_mode),
+            getString(R.string.parked_hint), PARKED_STEPS
+        ) { prefs.parkedMinutes }
+
+        val hiddenCount = prefs.hidden.size
+        addRow(
+            R.drawable.ic_info,
+            getString(R.string.hidden_apps),
+            resources.getQuantityString(R.plurals.hidden_count, hiddenCount, hiddenCount),
+            getString(R.string.hidden_hint)
+        ) {
+            if (hiddenCount == 0) {
+                Toast.makeText(this, R.string.hidden_none, Toast.LENGTH_SHORT).show()
+            } else {
+                prefs.clearHidden()
+                Toast.makeText(this, R.string.hidden_restored, Toast.LENGTH_SHORT).show()
+                build()
+            }
+        }
+
+        addRow(R.drawable.ic_home, getString(R.string.set_default_home), "", null) {
             openHomePicker()
         }
     }
 
-    private fun addRow(glyphRes: Int, title: String, value: String, onClick: () -> Unit) {
-        val row = inflateRow(glyphRes, title, value)
+    // ------------------------------------------------------------------ rows
+
+    private fun addRow(
+        glyphRes: Int,
+        title: String,
+        value: String,
+        subtitle: String?,
+        onClick: () -> Unit
+    ) {
+        val row = inflateRow(glyphRes, title, value, subtitle)
         row.setOnClickListener { onClick() }
         container.addView(row)
     }
@@ -73,44 +108,86 @@ class SettingsActivity : Activity() {
     private fun addToggle(
         glyphRes: Int,
         title: String,
+        subtitle: String?,
         initial: Boolean,
         onChange: (Boolean) -> Unit
     ) {
         var state = initial
-        val row = inflateRow(glyphRes, title, stateLabel(state))
+        val row = inflateRow(glyphRes, title, stateLabel(state), subtitle)
         val value = row.findViewById<TextView>(R.id.value)
-        value.setTextColor(if (state) accent else MUTED)
+        value.setTextColor(if (state) mode.glow else mode.dim)
         row.setOnClickListener {
             state = !state
             onChange(state)
             value.text = stateLabel(state)
-            value.setTextColor(if (state) accent else MUTED)
+            value.setTextColor(if (state) mode.glow else mode.dim)
         }
         container.addView(row)
     }
 
-    private fun inflateRow(glyphRes: Int, title: String, value: String): View {
+    /** Steps through a fixed list of minute values on each press. */
+    private fun addCycler(
+        glyphRes: Int,
+        title: String,
+        subtitle: String?,
+        steps: IntArray,
+        current: () -> Int
+    ) {
+        val row = inflateRow(glyphRes, title, minutesLabel(current()), subtitle)
+        val value = row.findViewById<TextView>(R.id.value)
+        value.setTextColor(if (current() > 0) mode.glow else mode.dim)
+        row.setOnClickListener {
+            val at = steps.indexOf(current()).let { if (it < 0) 0 else it }
+            val next = steps[(at + 1) % steps.size]
+            prefs.parkedMinutes = next
+            value.text = minutesLabel(next)
+            value.setTextColor(if (next > 0) mode.glow else mode.dim)
+        }
+        container.addView(row)
+    }
+
+    private fun inflateRow(
+        glyphRes: Int,
+        title: String,
+        value: String,
+        subtitle: String?
+    ): View {
         val row = LayoutInflater.from(this).inflate(R.layout.item_setting, container, false)
-        row.background = ThemeKit.cardSelector(this, accent, 16f)
+        row.background = ThemeKit.cardSelector(this, mode, 16f)
         row.outlineProvider = ThemeKit.roundedOutline(this, 16f)
         row.clipToOutline = true
 
         val glyph = row.findViewById<ImageView>(R.id.glyph)
         glyph.setImageResource(glyphRes)
-        glyph.setColorFilter(accent)
+        glyph.setColorFilter(mode.glow)
 
-        row.findViewById<TextView>(R.id.title).text = title
+        val titleView = row.findViewById<TextView>(R.id.title)
+        titleView.text = title
+        titleView.setTextColor(mode.ink)
+
+        val subtitleView = row.findViewById<TextView>(R.id.subtitle)
+        if (subtitle.isNullOrBlank()) {
+            subtitleView.visibility = View.GONE
+        } else {
+            subtitleView.visibility = View.VISIBLE
+            subtitleView.text = subtitle
+            subtitleView.setTextColor(mode.dim)
+        }
 
         val valueView = row.findViewById<TextView>(R.id.value)
         valueView.text = value
-        valueView.setTextColor(accent)
+        valueView.setTextColor(mode.glow)
         return row
     }
 
     private fun stateLabel(on: Boolean): String =
         getString(if (on) R.string.state_on else R.string.state_off)
 
-    /** Opens the system's home-app picker so you can make this the real home screen. */
+    private fun minutesLabel(minutes: Int): String =
+        if (minutes <= 0) getString(R.string.state_off)
+        else getString(R.string.minutes, minutes)
+
+    /** Opens the system home-app picker; we can only ever ask, never switch. */
     private fun openHomePicker() {
         val intent = Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
@@ -128,6 +205,7 @@ class SettingsActivity : Activity() {
 
     private fun about(): String = buildString {
         append(getString(R.string.app_name)).append("  v").append(BuildConfig.VERSION_NAME)
+        append("  (build ").append(BuildConfig.VERSION_CODE).append(')')
         append('\n')
         append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
         append('\n')
@@ -138,6 +216,6 @@ class SettingsActivity : Activity() {
     }
 
     private companion object {
-        const val MUTED = 0xFF8B93A2.toInt()
+        val PARKED_STEPS = intArrayOf(0, 15, 30, 60, 90)
     }
 }

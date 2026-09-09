@@ -5,6 +5,10 @@ plugins {
 
 // Resolved at the Project level (where Gradle's file() helper lives) so the
 // signing block below stays a simple null check.
+// CI passes its run number, so every published build is genuinely a new
+// version rather than every APK claiming to be 1.0.0 forever.
+val buildNumber = System.getenv("ASPECTS_BUILD_NUMBER")?.toIntOrNull() ?: 0
+
 val keystoreFile = System.getenv("ASPECTS_KEYSTORE")
     ?.takeIf { it.isNotBlank() }
     ?.let { file(it) }
@@ -20,8 +24,8 @@ android {
         // APK installable on essentially any Android TV box you might add later.
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 200 + buildNumber
+        versionName = "2.0.$buildNumber"
     }
 
     // Release signing is driven by env vars so no private key ever lands in this
