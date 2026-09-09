@@ -79,5 +79,22 @@
             android:name=".SettingsActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:exported="false" />
+
+        <!--
+            Captures the remote's HOME key on firmwares that hardwire it to the
+            bundled launcher. Off until the user enables it in Accessibility.
+        -->
+        <service
+            android:name=".HomeGuardService"
+            android:exported="true"
+            android:label="@string/home_guard_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/home_guard" />
+        </service>
     </application>
 </manifest>

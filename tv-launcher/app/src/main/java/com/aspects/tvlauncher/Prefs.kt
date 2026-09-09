@@ -8,6 +8,25 @@ class Prefs(context: Context) {
     private val sp = context.applicationContext
         .getSharedPreferences("aspects_tv", Context.MODE_PRIVATE)
 
+    init {
+        migrate()
+    }
+
+    /**
+     * Changing a default only affects fresh installs - an existing device has
+     * the old value written to disk and would keep it forever. Anything that has
+     * to change for people already running the app belongs here.
+     */
+    private fun migrate() {
+        if (sp.getInt(KEY_SCHEMA, 1) >= 2) return
+        sp.edit()
+            // v2 hides the All Apps row: firmware packs it with system apps
+            // (Clock, Disclaimer, TV Services) that clutter a home screen.
+            .putBoolean(KEY_SIDELOADED, false)
+            .putInt(KEY_SCHEMA, 2)
+            .apply()
+    }
+
     var driveMode: Int
         get() = sp.getInt(KEY_DRIVE_MODE, 0)
         set(value) = sp.edit().putInt(KEY_DRIVE_MODE, value).apply()
@@ -23,7 +42,7 @@ class Prefs(context: Context) {
         set(value) = sp.edit().putBoolean(KEY_CLOCK_GAUGE, value).apply()
 
     var showSideloaded: Boolean
-        get() = sp.getBoolean(KEY_SIDELOADED, true)
+        get() = sp.getBoolean(KEY_SIDELOADED, false)
         set(value) = sp.edit().putBoolean(KEY_SIDELOADED, value).apply()
 
     var showSystemRow: Boolean
@@ -91,6 +110,7 @@ class Prefs(context: Context) {
     }
 
     private companion object {
+        const val KEY_SCHEMA = "schema"
         const val KEY_DRIVE_MODE = "drive_mode"
         const val KEY_CLOCK_24H = "clock_24h"
         const val KEY_CLOCK_GAUGE = "clock_gauge"

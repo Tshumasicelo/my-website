@@ -17,6 +17,7 @@ class SettingsActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var container: LinearLayout
     private var mode = DriveMode.NIGHT
+    private var guardEnabled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,12 +33,37 @@ class SettingsActivity : Activity() {
         about.text = about()
 
         container = findViewById(R.id.container)
+        guardEnabled = HomeGuardService.isEnabled(this)
         build()
         container.post { container.getChildAt(0)?.requestFocus() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // The user may have just switched the service on in Accessibility.
+        val now = HomeGuardService.isEnabled(this)
+        if (now != guardEnabled) {
+            guardEnabled = now
+            build()
+        }
+    }
+
     private fun build() {
         container.removeAllViews()
+
+        addRow(
+            R.drawable.ic_home,
+            getString(R.string.home_takeover),
+            stateLabel(guardEnabled),
+            getString(if (guardEnabled) R.string.home_takeover_on else R.string.home_takeover_off),
+            guardEnabled
+        ) {
+            try {
+                startActivity(HomeGuardService.settingsIntent())
+            } catch (failed: Exception) {
+                Toast.makeText(this, R.string.cant_open, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         // Cycling on OK beats a nested swatch strip: one button, no second focus
         // axis to get lost in with a D-pad.
@@ -98,9 +124,12 @@ class SettingsActivity : Activity() {
         title: String,
         value: String,
         subtitle: String?,
+        highlight: Boolean = true,
         onClick: () -> Unit
     ) {
         val row = inflateRow(glyphRes, title, value, subtitle)
+        row.findViewById<TextView>(R.id.value)
+            .setTextColor(if (highlight) mode.glow else mode.dim)
         row.setOnClickListener { onClick() }
         container.addView(row)
     }

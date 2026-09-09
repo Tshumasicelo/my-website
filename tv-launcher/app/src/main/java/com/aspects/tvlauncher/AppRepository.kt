@@ -3,6 +3,7 @@ package com.aspects.tvlauncher
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 
@@ -50,11 +51,24 @@ object AppRepository {
             if (activity.packageName == self) continue
             if (tvPackages.contains(activity.packageName)) continue
             if (!seen.add(activity.packageName)) continue
+            if (isPreinstalled(activity.applicationInfo)) continue
             other += toEntry(info, pm, false)
         }
 
         val byLabel = compareBy<AppEntry> { it.label.lowercase() }
         return AppCatalog(tv.sortedWith(byLabel), other.sortedWith(byLabel))
+    }
+
+    /**
+     * Firmware ships a pile of non-TV system apps carrying a LAUNCHER filter -
+     * Clock, Disclaimer, Customization, TV Services - none of which belong on a
+     * home screen. Anything the user actually sideloaded is never FLAG_SYSTEM.
+     */
+    private fun isPreinstalled(app: ApplicationInfo?): Boolean {
+        if (app == null) return false
+        val system = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        val updated = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        return system && !updated
     }
 
     private fun toEntry(info: ResolveInfo, pm: PackageManager, isTvApp: Boolean): AppEntry {
