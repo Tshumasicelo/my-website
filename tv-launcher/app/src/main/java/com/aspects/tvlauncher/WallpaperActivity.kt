@@ -2,6 +2,7 @@ package com.aspects.tvlauncher
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.ContentUris
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -33,6 +34,12 @@ import java.util.concurrent.Executors
  * wallpapers shows up alongside internal storage.
  */
 class WallpaperActivity : Activity() {
+
+    /** Runs before any view exists, which is the only point the size can be set. */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(DisplaySize.wrap(base))
+    }
+
 
     private data class Item(val uri: Uri?, val name: String)
 

@@ -1,5 +1,6 @@
 package com.aspects.tvlauncher
 
+import android.content.Context
 import android.app.Activity
 import android.app.ActivityOptions
 import android.os.Bundle
@@ -19,6 +20,12 @@ import java.util.concurrent.Executors
  * home screen - hiding is about tidying the rows, not about losing the app.
  */
 class SearchActivity : Activity() {
+
+    /** Runs before any view exists, which is the only point the size can be set. */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(DisplaySize.wrap(base))
+    }
+
 
     private lateinit var prefs: Prefs
     private lateinit var icons: IconLoader

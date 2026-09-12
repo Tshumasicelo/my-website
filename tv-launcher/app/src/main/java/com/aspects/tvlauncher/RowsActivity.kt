@@ -1,5 +1,6 @@
 package com.aspects.tvlauncher
 
+import android.content.Context
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
@@ -17,6 +18,12 @@ import android.widget.TextView
  * the only pointer here is a D-pad. Two presses beat a gesture nobody can make.
  */
 class RowsActivity : Activity() {
+
+    /** Runs before any view exists, which is the only point the size can be set. */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(DisplaySize.wrap(base))
+    }
+
 
     private lateinit var prefs: Prefs
     private lateinit var container: LinearLayout

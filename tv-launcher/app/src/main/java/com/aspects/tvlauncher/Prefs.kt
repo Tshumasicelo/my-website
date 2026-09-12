@@ -141,7 +141,12 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_IGNITION, true)
         set(value) = sp.edit().putBoolean(KEY_IGNITION, value).apply()
 
-    /** Minutes of inactivity before Parked mode dims the screen. 0 disables it. */
+    /** Which of the three display sizes the launcher draws at. */
+    var displaySize: Int
+        get() = sp.getInt(KEY_DISPLAY_SIZE, DisplaySize.LARGE)
+        set(value) = sp.edit().putInt(KEY_DISPLAY_SIZE, value).apply()
+
+    /** Minutes of inactivity before the launcher fades to the wallpaper. 0 disables it. */
     var parkedMinutes: Int
         get() = sp.getInt(KEY_PARKED, 0)
         set(value) = sp.edit().putInt(KEY_PARKED, value).apply()
@@ -217,6 +222,7 @@ class Prefs(context: Context) {
         const val KEY_BACKDROP = "backdrop"
         const val KEY_IGNITION = "ignition"
         const val KEY_PARKED = "parked_minutes"
+        const val KEY_DISPLAY_SIZE = "display_size"
         const val KEY_HOME_PROMPT = "home_prompt_dismissed"
         const val KEY_FAVOURITES = "favourites_ordered"
         const val KEY_HIDDEN = "hidden_apps"
