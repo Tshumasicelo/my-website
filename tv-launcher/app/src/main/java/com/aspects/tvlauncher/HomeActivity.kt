@@ -51,12 +51,15 @@ class HomeActivity : Activity() {
     private lateinit var emptyView: TextView
     private lateinit var gaugeRam: GaugeView
     private lateinit var gaugeDisk: GaugeView
+    private lateinit var gaugeNet: GaugeView
+    private lateinit var lamps: LinearLayout
     private lateinit var bloom: View
     private lateinit var parked: View
     private lateinit var parkedClock: TextView
     private lateinit var homePrompt: LinearLayout
 
     private lateinit var favRow: Row
+    private lateinit var drivenRow: Row
     private lateinit var tvRow: Row
     private lateinit var allRow: Row
     private lateinit var sysRow: Row
@@ -70,6 +73,9 @@ class HomeActivity : Activity() {
     private var updateReady = false
     private var lastStats: Stats? = null
     private var pendingBackdrop: AppEntry? = null
+    private var focusedCard: View? = null
+    private var focusedKey: String? = null
+    private var appliedRowOrder: List<String>? = null
     private var wallpaperBitmap: Bitmap? = null
     private var wallpaperStamp = -1L
 
@@ -82,6 +88,7 @@ class HomeActivity : Activity() {
     private val ticker = object : Runnable {
         override fun run() {
             updateClock()
+            applyModeIfChanged()
             if (prefs.showStats) refreshStats()
             ui.postDelayed(this, TICK_MS)
         }
@@ -116,12 +123,15 @@ class HomeActivity : Activity() {
         emptyView = findViewById(R.id.empty)
         gaugeRam = findViewById(R.id.gaugeRam)
         gaugeDisk = findViewById(R.id.gaugeDisk)
+        gaugeNet = findViewById(R.id.gaugeNet)
+        lamps = findViewById(R.id.lamps)
         bloom = findViewById(R.id.bloom)
         parked = findViewById(R.id.parked)
         parkedClock = findViewById(R.id.parkedClock)
         homePrompt = findViewById(R.id.homePrompt)
 
         favRow = Row(findViewById(R.id.titleFav), findViewById(R.id.rowFav))
+        drivenRow = Row(findViewById(R.id.titleDriven), findViewById(R.id.rowDriven))
         tvRow = Row(findViewById(R.id.titleTv), findViewById(R.id.rowTv))
         allRow = Row(findViewById(R.id.titleAll), findViewById(R.id.rowAll))
         sysRow = Row(findViewById(R.id.titleSys), findViewById(R.id.rowSys))
@@ -164,6 +174,8 @@ class HomeActivity : Activity() {
         ui.removeCallbacksAndMessages(null)
         gaugeRam.stopAnimation()
         gaugeDisk.stopAnimation()
+        gaugeNet.stopAnimation()
+        focusedCard = null
         icons.shutdown()
         art.shutdown()
         io.shutdownNow()
@@ -185,9 +197,14 @@ class HomeActivity : Activity() {
 
     // ---------------------------------------------------------------- theming
 
+    /** With Adaptive on this changes by itself, so the ticker re-checks it. */
+    private fun currentModeIndex(): Int =
+        prefs.effectiveModeIndex(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+
     private fun applyModeIfChanged() {
-        if (builtMode == prefs.driveMode) return
-        builtMode = prefs.driveMode
+        val wanted = currentModeIndex()
+        if (builtMode == wanted) return
+        builtMode = wanted
         mode = DriveMode.byIndex(builtMode)
 
         background.mode = mode
@@ -199,7 +216,7 @@ class HomeActivity : Activity() {
         statusView.setTextColor(mode.dim)
         emptyView.setTextColor(mode.dim)
 
-        listOf(gaugeRam, gaugeDisk).forEach {
+        listOf(gaugeRam, gaugeDisk, gaugeNet).forEach {
             it.glow = mode.glow
             it.accent = mode.accent
             it.dim = mode.dim
@@ -210,6 +227,7 @@ class HomeActivity : Activity() {
 
         gaugeRam.label = getString(R.string.gauge_ram)
         gaugeDisk.label = getString(R.string.gauge_disk)
+        gaugeNet.label = getString(R.string.gauge_net)
 
         homePrompt.background = ThemeKit.panel(this, mode)
         parked.setBackgroundColor(ThemeKit.withAlpha(mode.ground, 0.94f))
@@ -222,7 +240,7 @@ class HomeActivity : Activity() {
         // have to be rebuilt for a new Drive Mode to reach recycled views.
         clearBackdrop()
         wallpaperStamp = -1L
-        favRow.rebuild(); tvRow.rebuild(); allRow.rebuild(); sysRow.rebuild()
+        favRow.rebuild(); drivenRow.rebuild(); tvRow.rebuild(); allRow.rebuild(); sysRow.rebuild()
     }
 
     // -------------------------------------------------------------- ignition
@@ -243,7 +261,10 @@ class HomeActivity : Activity() {
         bloom.alpha = 0f
         bloom.visibility = View.VISIBLE
 
-        ui.postDelayed({ if (igniting) { gaugeRam.sweep(); gaugeDisk.sweep() } }, 220L)
+        ui.postDelayed(
+            { if (igniting) { gaugeRam.sweep(); gaugeDisk.sweep(); gaugeNet.sweep() } },
+            220L
+        )
         ui.postDelayed({
             if (!igniting) return@postDelayed
             bloom.animate().alpha(0.9f).setDuration(240L).withEndAction {
@@ -344,7 +365,11 @@ class HomeActivity : Activity() {
      * Focus moves faster than artwork loads while you hold a direction, so the
      * load is deferred briefly and superseded by whatever you land on.
      */
-    private fun onCardFocus(item: CardItem) {
+    private fun onCardFocus(item: CardItem, view: View) {
+        focusedCard = view
+        focusedKey = item.app?.key
+        applyGlow(view, item.app?.let { art.cachedTint(it) } ?: 0)
+
         ui.removeCallbacks(backdropRunnable)
         val app = item.app
         if (!prefs.backdrop || app == null) {
@@ -365,6 +390,12 @@ class HomeActivity : Activity() {
 
         backdrop.setImageBitmap(found.bitmap)
 
+        // The artwork arrives after focus moved, so the ring is repainted now
+        // that its colour is finally known.
+        if (found.tint != 0 && focusedKey == entry.key) {
+            focusedCard?.let { applyGlow(it, found.tint) }
+        }
+
         // Held well back from full strength: this sits under a clock and four
         // rows of text, and legibility beats spectacle on a screen read from
         // across a room.
@@ -381,6 +412,17 @@ class HomeActivity : Activity() {
 
         backdrop.animate().alpha(1f).setDuration(380L).start()
         scrim.animate().alpha(1f).setDuration(380L).start()
+    }
+
+    /** Repaints one card's ring and bloom. Only ever the focused card, so the
+     *  fresh drawable costs nothing worth measuring. */
+    private fun applyGlow(view: View, tint: Int) {
+        val glow = if (tint == 0) mode.glow else tint
+        view.background = ThemeKit.cardSelector(this, mode, 14f, glow)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            view.outlineSpotShadowColor = glow
+            view.outlineAmbientShadowColor = glow
+        }
     }
 
     private fun clearBackdrop() {
@@ -435,8 +477,19 @@ class HomeActivity : Activity() {
         val everything = catalog.tv + catalog.other
         val byKey = everything.associateBy { it.key }
 
+        applyRowTitles()
+        applyRowOrder()
+
         // favourites keep the order you pinned them in
         favRow.submit(favourites.mapNotNull { byKey[it] }.map { card(it) })
+
+        // the trip computer: whatever you actually open most, ranked
+        drivenRow.submit(
+            prefs.topLaunched(DRIVEN_LIMIT)
+                .mapNotNull { byKey[it] }
+                .filterNot { hidden.contains(it.key) }
+                .map { card(it) }
+        )
 
         tvRow.submit(catalog.tv.filterNot { hidden.contains(it.key) }.map { card(it) })
         allRow.submit(
@@ -454,6 +507,63 @@ class HomeActivity : Activity() {
     }
 
     /** Real TV apps get a wide 16:9 banner card; sideloaded apps get an icon tile. */
+    private fun applyRowTitles() {
+        findViewById<TextView>(R.id.titleFav).text =
+            prefs.rowName(Prefs.ROW_FAVOURITES, getString(R.string.row_favourites))
+        findViewById<TextView>(R.id.titleDriven).text =
+            prefs.rowName(Prefs.ROW_DRIVEN, getString(R.string.row_driven))
+        findViewById<TextView>(R.id.titleTv).text =
+            prefs.rowName(Prefs.ROW_TV, getString(R.string.row_tv_apps))
+        findViewById<TextView>(R.id.titleAll).text =
+            prefs.rowName(Prefs.ROW_ALL, getString(R.string.row_all_apps))
+        findViewById<TextView>(R.id.titleSys).text =
+            prefs.rowName(Prefs.ROW_SYSTEM, getString(R.string.row_system))
+    }
+
+    /**
+     * Rows are declared in one fixed order in the layout and shuffled here, which
+     * keeps the XML readable and means reordering never rebuilds an adapter.
+     */
+    private fun applyRowOrder() {
+        val order = prefs.rowOrder
+        if (order == appliedRowOrder) return
+        appliedRowOrder = order
+
+        val views = mapOf(
+            Prefs.ROW_FAVOURITES to Pair<View, View>(
+                findViewById(R.id.titleFav), findViewById(R.id.rowFav)
+            ),
+            Prefs.ROW_DRIVEN to Pair<View, View>(
+                findViewById(R.id.titleDriven), findViewById(R.id.rowDriven)
+            ),
+            Prefs.ROW_TV to Pair<View, View>(
+                findViewById(R.id.titleTv), findViewById(R.id.rowTv)
+            ),
+            Prefs.ROW_ALL to Pair<View, View>(
+                findViewById(R.id.titleAll), findViewById(R.id.rowAll)
+            ),
+            Prefs.ROW_SYSTEM to Pair<View, View>(
+                findViewById(R.id.titleSys), findViewById(R.id.rowSys)
+            )
+        )
+
+        val indices = views.values
+            .flatMap { listOf(content.indexOfChild(it.first), content.indexOfChild(it.second)) }
+            .filter { it >= 0 }
+        val base = indices.minOrNull() ?: return
+
+        views.values.forEach { (title, list) ->
+            content.removeView(title)
+            content.removeView(list)
+        }
+        var at = base
+        order.forEach { id ->
+            val pair = views[id] ?: return@forEach
+            content.addView(pair.first, at++)
+            content.addView(pair.second, at++)
+        }
+    }
+
     private fun card(entry: AppEntry): CardItem =
         CardItem(entry.key, entry.label, entry, R.drawable.ic_app_placeholder, entry.isTvApp)
 
@@ -478,6 +588,7 @@ class HomeActivity : Activity() {
     private fun onCardClick(item: CardItem, from: View) {
         val app = item.app
         if (app != null) {
+            prefs.recordLaunch(app.key)
             launchApp(AppRepository.launchIntent(app), from)
             return
         }
@@ -634,14 +745,64 @@ class HomeActivity : Activity() {
             gaugeDisk.setValue((used / stats.storageTotalGb).toFloat(), !igniting)
         }
 
+        // Throughput has no natural maximum, so the dial is scaled to something a
+        // television actually reaches. Anything above it simply reads full.
+        gaugeNet.reading = String.format(Locale.US, "%.1f", stats.rxMbps)
+        gaugeNet.setValue((stats.rxMbps / NET_FULL_SCALE).toFloat(), !igniting)
+
+        // Deliberately no IP address here. It is a home screen, not a diagnostic
+        // readout, and the number is in Settings for when you actually want it.
         val parts = ArrayList<String>()
         parts.add(stats.network)
-        stats.ip?.let { parts.add(it) }
         stats.cpuTempC?.let { parts.add(String.format(Locale.US, "%.0f°C", it)) }
         parts.add(getString(R.string.up_for, stats.uptime))
-        if (updateReady) parts.add(getString(R.string.update_ready))
         statusView.text = parts.joinToString("  ·  ")
-        statusView.setTextColor(if (updateReady) mode.accent else mode.dim)
+        statusView.setTextColor(mode.dim)
+
+        renderLamps(stats)
+    }
+
+    /**
+     * Dash telltales. Dark until something needs saying, which is the whole point
+     * of a warning lamp: you notice the one that lights, not the row of them.
+     * Semantic colours are fixed rather than themed - red means the same thing in
+     * every car ever built.
+     */
+    private fun renderLamps(stats: Stats) {
+        val ramFraction =
+            if (stats.ramTotalMb > 0L) stats.ramUsedMb.toFloat() / stats.ramTotalMb.toFloat()
+            else 0f
+
+        val states = listOf(
+            Triple(R.drawable.ic_memory, LAMP_RED, ramFraction > 0.85f),
+            Triple(
+                R.drawable.ic_storage, LAMP_AMBER,
+                stats.storageTotalGb > 0.0 && stats.storageFreeGb < 1.0
+            ),
+            Triple(R.drawable.ic_signal, LAMP_BLUE, stats.network == "Offline"),
+            Triple(R.drawable.ic_thermo, LAMP_RED, (stats.cpuTempC ?: 0.0) > 75.0),
+            Triple(R.drawable.ic_info, LAMP_GREEN, updateReady)
+        )
+
+        if (lamps.childCount != states.size) {
+            lamps.removeAllViews()
+            val size = ThemeKit.dp(this, 17f)
+            for (state in states) {
+                val lamp = ImageView(this)
+                lamp.setImageResource(state.first)
+                val params = LinearLayout.LayoutParams(size, size)
+                params.marginStart = ThemeKit.dp(this, 12f)
+                lamp.layoutParams = params
+                lamps.addView(lamp)
+            }
+        }
+
+        for (index in states.indices) {
+            val lamp = lamps.getChildAt(index) as? ImageView ?: continue
+            val lit = states[index].third
+            lamp.setColorFilter(if (lit) states[index].second else mode.dim)
+            lamp.alpha = if (lit) 1f else 0.16f
+        }
     }
 
     // ------------------------------------------------------------ housekeeping
@@ -699,6 +860,14 @@ class HomeActivity : Activity() {
     private companion object {
         const val TICK_MS = 10_000L
         const val BACKDROP_DELAY_MS = 220L
+        const val NET_FULL_SCALE = 25.0
+        const val DRIVEN_LIMIT = 8
+
+        // Warning-lamp colours are semantic, not themed.
+        const val LAMP_RED = 0xFFFF3B30.toInt()
+        const val LAMP_AMBER = 0xFFFFB020.toInt()
+        const val LAMP_GREEN = 0xFF34C759.toInt()
+        const val LAMP_BLUE = 0xFF4FA8FF.toInt()
 
         const val TILE_SEARCH = "tile.search"
         const val TILE_THEME = "tile.theme"

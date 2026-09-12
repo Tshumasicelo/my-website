@@ -28,7 +28,7 @@ class CardAdapter(
     private val mode: DriveMode,
     private val onClick: (CardItem, View) -> Unit,
     private val onLongClick: (CardItem) -> Boolean,
-    private val onFocus: (CardItem) -> Unit = {}
+    private val onFocus: (CardItem, View) -> Unit = { _, _ -> }
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var items: List<CardItem> = emptyList()
@@ -126,7 +126,7 @@ class CardAdapter(
             v.elevation = if (hasFocus) lift else 0f
             if (hasFocus) {
                 sweep(gloss, v.width)
-                onFocus(item)
+                onFocus(item, v)
             } else {
                 gloss?.visibility = View.INVISIBLE
             }

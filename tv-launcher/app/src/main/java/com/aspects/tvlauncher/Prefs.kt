@@ -33,6 +33,81 @@ class Prefs(context: Context) {
 
     val mode: DriveMode get() = DriveMode.byIndex(driveMode)
 
+    var adaptiveMode: Boolean
+        get() = sp.getBoolean(KEY_ADAPTIVE, false)
+        set(value) = sp.edit().putBoolean(KEY_ADAPTIVE, value).apply()
+
+    /**
+     * Which Drive Mode is actually in force. Night Drive holds the brightest
+     * hours because its black ground survives window glare; Sunset Run takes
+     * golden hour; Wet Neon owns the dark.
+     */
+    fun effectiveModeIndex(hourOfDay: Int): Int {
+        if (!adaptiveMode) return driveMode
+        return when (hourOfDay) {
+            in 6..15 -> 0
+            in 16..18 -> 2
+            else -> 1
+        }
+    }
+
+    // ---------------------------------------------------------- trip computer
+
+    fun recordLaunch(key: String) {
+        sp.edit().putInt(KEY_LAUNCHES + key, launchCount(key) + 1).apply()
+    }
+
+    fun launchCount(key: String): Int = sp.getInt(KEY_LAUNCHES + key, 0)
+
+    /** Most-launched first. The Most Driven row builds itself from this. */
+    fun topLaunched(limit: Int): List<String> = sp.all.entries
+        .asSequence()
+        .filter { it.key.startsWith(KEY_LAUNCHES) && it.value is Int }
+        .sortedByDescending { it.value as Int }
+        .take(limit)
+        .map { it.key.removePrefix(KEY_LAUNCHES) }
+        .toList()
+
+    fun clearLaunches() {
+        val editor = sp.edit()
+        sp.all.keys.filter { it.startsWith(KEY_LAUNCHES) }.forEach { editor.remove(it) }
+        editor.apply()
+    }
+
+    // ------------------------------------------------------------------- rows
+
+    /** Ids in display order. Unknown ids are ignored; missing ones are appended. */
+    var rowOrder: List<String>
+        get() {
+            val stored = sp.getString(KEY_ROW_ORDER, null)
+                ?.split(',')
+                ?.filter { it.isNotBlank() && DEFAULT_ROWS.contains(it) }
+                ?: emptyList()
+            return stored + DEFAULT_ROWS.filterNot { stored.contains(it) }
+        }
+        set(value) = sp.edit().putString(KEY_ROW_ORDER, value.joinToString(",")).apply()
+
+    fun moveRow(id: String, delta: Int) {
+        val next = rowOrder.toMutableList()
+        val from = next.indexOf(id)
+        if (from < 0) return
+        val to = (from + delta).coerceIn(0, next.size - 1)
+        if (to == from) return
+        next.removeAt(from)
+        next.add(to, id)
+        rowOrder = next
+    }
+
+    fun rowName(id: String, fallback: String): String =
+        sp.getString(KEY_ROW_NAME + id, null)?.takeIf { it.isNotBlank() } ?: fallback
+
+    fun setRowName(id: String, name: String?) {
+        val editor = sp.edit()
+        if (name.isNullOrBlank()) editor.remove(KEY_ROW_NAME + id)
+        else editor.putString(KEY_ROW_NAME + id, name.trim())
+        editor.apply()
+    }
+
     var clock24h: Boolean
         get() = sp.getBoolean(KEY_CLOCK_24H, true)
         set(value) = sp.edit().putBoolean(KEY_CLOCK_24H, value).apply()
@@ -118,8 +193,20 @@ class Prefs(context: Context) {
         hidden = emptySet()
     }
 
-    private companion object {
+    companion object {
+        const val ROW_FAVOURITES = "fav"
+        const val ROW_DRIVEN = "driven"
+        const val ROW_TV = "tv"
+        const val ROW_ALL = "all"
+        const val ROW_SYSTEM = "sys"
+
+        val DEFAULT_ROWS = listOf(ROW_FAVOURITES, ROW_DRIVEN, ROW_TV, ROW_ALL, ROW_SYSTEM)
+
         const val KEY_SCHEMA = "schema"
+        const val KEY_ADAPTIVE = "adaptive_mode"
+        const val KEY_LAUNCHES = "launch."
+        const val KEY_ROW_ORDER = "row_order"
+        const val KEY_ROW_NAME = "row_name."
         const val KEY_DRIVE_MODE = "drive_mode"
         const val KEY_CLOCK_24H = "clock_24h"
         const val KEY_CLOCK_GAUGE = "clock_gauge"

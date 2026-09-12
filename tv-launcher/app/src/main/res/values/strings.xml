@@ -6,6 +6,28 @@
     <string name="row_tv_apps">TV Apps</string>
     <string name="row_all_apps">All Apps</string>
     <string name="row_system">System</string>
+    <string name="row_driven">Most Driven</string>
+
+    <string name="gauge_net">NET</string>
+
+    <string name="adaptive_mode">Adaptive Drive Mode</string>
+    <string name="adaptive_hint">Let the clock pick: Night Drive through the day, Sunset Run at dusk, Wet Neon after dark.</string>
+    <string name="adaptive_value">Adaptive</string>
+    <string name="adaptive_active">The clock is choosing. Switch Adaptive off to pick one yourself.</string>
+
+    <string name="rows_title">Rows</string>
+    <string name="rows_settings_hint">Reorder the home rows, or call them whatever you like.</string>
+    <string name="rows_hint">Press a row to move or rename it. Rows with nothing in them stay hidden on the home screen.</string>
+    <string name="rows_position">%1$d</string>
+    <string name="rows_renamed_from">Normally \u201c%1$s\u201d</string>
+    <string name="rows_move_up">Move up</string>
+    <string name="rows_move_down">Move down</string>
+    <string name="rows_rename">Rename</string>
+    <string name="rows_reset_name">Use the original name</string>
+
+    <string name="reset_trip">Reset Most Driven</string>
+    <string name="reset_trip_hint">Forgets how often you have opened each app and starts counting again.</string>
+    <string name="trip_cleared">Most Driven reset</string>
 
     <string name="gauge_ram">MEM</string>
     <string name="gauge_disk">FREE</string>

@@ -67,9 +67,40 @@ class SettingsActivity : Activity() {
 
         // Cycling on OK beats a nested swatch strip: one button, no second focus
         // axis to get lost in with a D-pad.
-        addRow(R.drawable.ic_star, getString(R.string.drive_mode), mode.label, mode.blurb) {
+        addRow(
+            R.drawable.ic_star,
+            getString(R.string.drive_mode),
+            if (prefs.adaptiveMode) getString(R.string.adaptive_value) else mode.label,
+            if (prefs.adaptiveMode) getString(R.string.adaptive_active) else mode.blurb
+        ) {
             prefs.driveMode = DriveMode.next(prefs.driveMode)
             recreate()
+        }
+
+        addToggle(
+            R.drawable.ic_clock, getString(R.string.adaptive_mode),
+            getString(R.string.adaptive_hint), prefs.adaptiveMode
+        ) {
+            prefs.adaptiveMode = it
+        }
+
+        addRow(
+            R.drawable.ic_apps,
+            getString(R.string.rows_title),
+            "",
+            getString(R.string.rows_settings_hint)
+        ) {
+            startActivity(Intent(this, RowsActivity::class.java))
+        }
+
+        addRow(
+            R.drawable.ic_signal,
+            getString(R.string.reset_trip),
+            "",
+            getString(R.string.reset_trip_hint)
+        ) {
+            prefs.clearLaunches()
+            Toast.makeText(this, R.string.trip_cleared, Toast.LENGTH_SHORT).show()
         }
 
         addRow(
@@ -315,6 +346,12 @@ class SettingsActivity : Activity() {
         append("  (API ").append(Build.VERSION.SDK_INT).append(')')
         append('\n')
         append("Build ").append(Build.DISPLAY)
+        // Moved off the home screen but kept where it is genuinely wanted: this
+        // is the number you need to reach the TV over ADB.
+        SystemStats.read(this@SettingsActivity).ip?.let {
+            append('\n')
+            append("IP ").append(it)
+        }
     }
 
     private companion object {

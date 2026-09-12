@@ -38,6 +38,9 @@ class Backdrop(context: Context) {
         io.shutdownNow()
     }
 
+    /** The tint if this app's artwork is already cached, or 0 if not yet known. */
+    fun cachedTint(entry: AppEntry): Int = cache.get(entry.key)?.tint ?: 0
+
     fun load(entry: AppEntry, onReady: (Art?) -> Unit) {
         cache.get(entry.key)?.let {
             onReady(it)

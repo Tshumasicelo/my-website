@@ -52,10 +52,16 @@ object ThemeKit {
      * A fresh selector per view on purpose: one shared StateListDrawable would
      * light every card at once, because drawable state is per instance.
      */
-    fun cardSelector(ctx: Context, mode: DriveMode, radiusDp: Float = 14f): StateListDrawable {
+    fun cardSelector(
+        ctx: Context,
+        mode: DriveMode,
+        radiusDp: Float = 14f,
+        glowOverride: Int = 0
+    ): StateListDrawable {
+        val glow = if (glowOverride == 0) mode.glow else glowOverride
         val r = dp(ctx, radiusDp).toFloat()
         val focused = rounded(
-            withAlpha(mode.glow, 0.14f), mode.glow, dp(ctx, 3f), r
+            withAlpha(glow, 0.14f), glow, dp(ctx, 3f), r
         )
         val idle = rounded(GLASS, HAIRLINE, dp(ctx, 1f), r)
         return StateListDrawable().apply {
