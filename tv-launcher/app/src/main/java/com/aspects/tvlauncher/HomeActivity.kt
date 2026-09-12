@@ -598,7 +598,7 @@ class HomeActivity : Activity() {
             TILE_HOME -> launchSettings(Settings.ACTION_HOME_SETTINGS)
             TILE_SETTINGS -> launchSettings(Settings.ACTION_SETTINGS)
             TILE_NETWORK -> launchSettings(Settings.ACTION_WIFI_SETTINGS)
-            TILE_DISPLAY -> launchSettings(Settings.ACTION_DISPLAY_SETTINGS)
+            TILE_DISPLAY -> launch(Intent(this, WallpaperActivity::class.java))
             TILE_APPS -> launchSettings(Settings.ACTION_APPLICATION_SETTINGS)
             TILE_STORAGE -> launchSettings(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)
             TILE_DATETIME -> launchSettings(Settings.ACTION_DATE_SETTINGS)
