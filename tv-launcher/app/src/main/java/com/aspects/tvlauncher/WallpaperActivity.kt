@@ -79,12 +79,20 @@ class WallpaperActivity : Activity() {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
 
-    private fun hasPermission(): Boolean =
-        checkSelfPermission(permissionName()) == PackageManager.PERMISSION_GRANTED
+    private fun hasPermission(): Boolean {
+        // Before Marshmallow there was no runtime model: storage was granted at
+        // install, so there is nothing to ask for.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        return checkSelfPermission(permissionName()) == PackageManager.PERMISSION_GRANTED
+    }
 
     private fun requestPermission() {
         hint.text = getString(R.string.wallpaper_permission)
-        requestPermissions(arrayOf(permissionName()), REQUEST_READ)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(arrayOf(permissionName()), REQUEST_READ)
+        } else {
+            loadImages()
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -126,7 +134,7 @@ class WallpaperActivity : Activity() {
         val volumes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.getExternalVolumeNames(this).toList()
         } else {
-            listOf(MediaStore.VOLUME_EXTERNAL)
+            listOf("external")
         }
         val projection = arrayOf(
             MediaStore.Images.Media._ID,

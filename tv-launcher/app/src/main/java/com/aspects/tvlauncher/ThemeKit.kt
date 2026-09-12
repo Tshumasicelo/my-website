@@ -29,6 +29,17 @@ object ThemeKit {
         Color.red(color), Color.green(color), Color.blue(color)
     )
 
+    /** Mixes [overlay] into [base] by [ratio]. Alpha is ignored; callers add it. */
+    fun blend(base: Int, overlay: Int, ratio: Float): Int {
+        val mix = ratio.coerceIn(0f, 1f)
+        val keep = 1f - mix
+        return Color.rgb(
+            (Color.red(base) * keep + Color.red(overlay) * mix).toInt(),
+            (Color.green(base) * keep + Color.green(overlay) * mix).toInt(),
+            (Color.blue(base) * keep + Color.blue(overlay) * mix).toInt()
+        )
+    }
+
     private fun rounded(fill: Int, strokeColor: Int, strokeWidth: Int, radius: Float) =
         GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
