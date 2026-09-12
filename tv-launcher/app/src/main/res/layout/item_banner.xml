@@ -14,7 +14,7 @@
         android:contentDescription="@null"
         android:scaleType="centerCrop" />
 
-    <!-- Shown when an app ships no 320x180 TV banner: icon over a plain card. -->
+    <!-- Shown when an app ships no 320x180 TV banner. -->
     <LinearLayout
         android:id="@+id/fallback"
         android:layout_width="match_parent"
@@ -39,7 +39,15 @@
             android:ellipsize="end"
             android:gravity="center"
             android:maxLines="2"
-            android:textColor="@color/text"
+            android:textColor="#F2F4F8"
             android:textSize="14sp" />
     </LinearLayout>
+
+    <View
+        android:id="@+id/gloss"
+        android:layout_width="60dp"
+        android:layout_height="260dp"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/gloss"
+        android:visibility="invisible" />
 </FrameLayout>

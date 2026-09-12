@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.TrafficStats
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
@@ -20,7 +21,9 @@ data class Stats(
     val network: String,
     val ip: String?,
     val cpuTempC: Double?,
-    val uptime: String
+    val uptime: String,
+    /** Download throughput since the previous sample, in megabits per second. */
+    val rxMbps: Double
 )
 
 /**
@@ -29,6 +32,9 @@ data class Stats(
  * the header when the box will not answer.
  */
 object SystemStats {
+
+    private var lastRxBytes = -1L
+    private var lastRxAt = 0L
 
     fun read(ctx: Context): Stats {
         val (usedMb, totalMb) = ram(ctx)
@@ -41,8 +47,31 @@ object SystemStats {
             network = network(ctx),
             ip = localIp(),
             cpuTempC = cpuTemp(),
-            uptime = uptime()
+            uptime = uptime(),
+            rxMbps = throughput()
         )
+    }
+
+    /**
+     * Throughput is a rate, and the counter is a total since boot, so it can only
+     * be measured against the previous sample. The first call after launch has
+     * nothing to compare against and reports zero rather than a spike.
+     */
+    private fun throughput(): Double {
+        val bytes = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
+        if (bytes < 0L) return 0.0
+
+        val now = SystemClock.elapsedRealtime()
+        val previousBytes = lastRxBytes
+        val previousAt = lastRxAt
+        lastRxBytes = bytes
+        lastRxAt = now
+
+        if (previousBytes < 0L) return 0.0
+        val seconds = (now - previousAt) / 1000.0
+        if (seconds <= 0.0) return 0.0
+        val delta = (bytes - previousBytes).coerceAtLeast(0L)
+        return delta * 8.0 / 1_000_000.0 / seconds
     }
 
     private fun ram(ctx: Context): Pair<Long, Long> = runCatching {

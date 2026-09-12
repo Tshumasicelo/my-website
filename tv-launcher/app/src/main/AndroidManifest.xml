@@ -9,6 +9,15 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Only ever used to ask the tv-latest release what the newest build number is. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Only to list images for the wallpaper picker. Requested at the moment
+         you open it, never at install. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <!--
         Android 11 (API 30) introduced package visibility filtering: queryIntentActivities()
@@ -25,6 +34,11 @@
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- So we can tell whether some other launcher is currently the home screen. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
 
@@ -63,8 +77,41 @@
         </activity>
 
         <activity
+            android:name=".SearchActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
+        <activity
+            android:name=".WallpaperActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
+
+        <activity
+            android:name=".RowsActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
+            android:exported="false" />
+
+        <activity
             android:name=".SettingsActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:exported="false" />
+
+        <!--
+            Captures the remote's HOME key on firmwares that hardwire it to the
+            bundled launcher. Off until the user enables it in Accessibility.
+        -->
+        <service
+            android:name=".HomeGuardService"
+            android:exported="true"
+            android:label="@string/home_guard_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/home_guard" />
+        </service>
     </application>
 </manifest>

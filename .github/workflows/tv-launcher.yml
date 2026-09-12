@@ -25,6 +25,8 @@ jobs:
       ASPECTS_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       ASPECTS_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       ASPECTS_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      # Drives versionCode/versionName so each build is a real update.
+      ASPECTS_BUILD_NUMBER: ${{ github.run_number }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +48,42 @@ jobs:
 
       - name: Restore signing key
         if: env.KEYSTORE_BASE64 != ''
-        run: echo "$KEYSTORE_BASE64" | base64 -d > "$ASPECTS_KEYSTORE"
+        run: |
+          # Strip every whitespace character before decoding. Pasting a 3.6 KB
+          # base64 blob into the secrets UI - especially on a phone - routinely
+          # introduces a line break or a stray space, and GNU base64 rejects the
+          # entire input the moment it meets one.
+          CLEANED=$(printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]')
+          echo "KEYSTORE_BASE64 length after cleaning: ${#CLEANED} characters"
+          echo "Expected length for this keystore:     3624 characters"
+
+          if [ "${#CLEANED}" -lt 3624 ]; then
+            echo "::error::The secret is shorter than expected, so it was truncated when pasted. Re-copy the FULL single line and update the KEYSTORE_BASE64 secret."
+            exit 1
+          fi
+
+          if ! printf '%s' "$CLEANED" | base64 -d > "$ASPECTS_KEYSTORE" 2>/dev/null; then
+            echo "::error::KEYSTORE_BASE64 is not valid base64 even after removing whitespace. Re-copy the file contents exactly and update the secret."
+            exit 1
+          fi
+
+          # Prove the bytes really are the keystore, and that the passwords and
+          # alias line up, rather than discovering it three minutes later inside
+          # a Gradle stack trace.
+          if ! keytool -list -keystore "$ASPECTS_KEYSTORE" \
+                 -storepass "$ASPECTS_KEYSTORE_PASSWORD" > /dev/null 2>&1; then
+            echo "::error::The keystore decoded but will not open. Check the KEYSTORE_PASSWORD secret."
+            exit 1
+          fi
+
+          if ! keytool -list -keystore "$ASPECTS_KEYSTORE" \
+                 -storepass "$ASPECTS_KEYSTORE_PASSWORD" \
+                 -alias "$ASPECTS_KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::The keystore opened but has no key under that alias. Check the KEY_ALIAS secret (it should be: aspectstv)."
+            exit 1
+          fi
+
+          echo "Signing key restored and verified - this build will be release-signed."
 
       - name: Build release APK
         run: |
@@ -57,6 +94,11 @@ jobs:
         run: |
           mkdir -p out
           cp app/build/outputs/apk/release/app-release.apk out/aspects-tv.apk
+          # The launcher reads this to decide whether an update is available,
+          # instead of scraping an APK or hitting a rate-limited API.
+          printf '{"versionCode": %s, "versionName": "2.0.%s"}\n' \
+            "$((200 + ASPECTS_BUILD_NUMBER))" "$ASPECTS_BUILD_NUMBER" > out/version.json
+          cat out/version.json
           ls -lh out/
 
       - name: Remove signing key
@@ -76,6 +118,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete tv-latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create tv-latest out/aspects-tv.apk \
+          gh release create tv-latest out/aspects-tv.apk out/version.json \
             --title "ASPECTS TV - latest build" \
             --notes "Sideload APK for Android TV. Built from \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`."

@@ -3,6 +3,7 @@ package com.aspects.tvlauncher
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 
@@ -10,7 +11,13 @@ data class AppEntry(
     val packageName: String,
     val activityName: String,
     val label: String,
-    val isTvApp: Boolean
+    val isTvApp: Boolean,
+    /**
+     * Shipped with the firmware rather than installed by the user. Kept as a flag
+     * instead of being dropped here, so these apps stay reachable through search
+     * even once the home rows stop showing them.
+     */
+    val preinstalled: Boolean
 ) {
     /** Stable identity for favourites and the icon cache. */
     val key: String get() = "$packageName/$activityName"
@@ -63,7 +70,25 @@ object AppRepository {
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?: activity.packageName
-        return AppEntry(activity.packageName, activity.name, label, isTvApp)
+        return AppEntry(
+            packageName = activity.packageName,
+            activityName = activity.name,
+            label = label,
+            isTvApp = isTvApp,
+            preinstalled = isPreinstalled(activity.applicationInfo)
+        )
+    }
+
+    /**
+     * Firmware ships a pile of non-TV system apps carrying a LAUNCHER filter -
+     * Clock, Disclaimer, Customization, TV Services - none of which belong on a
+     * home screen. Anything the user actually sideloaded is never FLAG_SYSTEM.
+     */
+    private fun isPreinstalled(app: ApplicationInfo?): Boolean {
+        if (app == null) return false
+        val system = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        val updated = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        return system && !updated
     }
 
     /** Explicit component, so the target's own intent filters never get in the way. */

@@ -6,21 +6,92 @@
     <string name="row_tv_apps">TV Apps</string>
     <string name="row_all_apps">All Apps</string>
     <string name="row_system">System</string>
+    <string name="row_driven">Most Driven</string>
+
+    <string name="gauge_net">NET</string>
+
+    <string name="adaptive_mode">Adaptive Drive Mode</string>
+    <string name="adaptive_hint">Let the clock pick: Night Drive through the day, Sunset Run at dusk, Wet Neon after dark.</string>
+    <string name="adaptive_value">Adaptive</string>
+    <string name="adaptive_active">The clock is choosing. Switch Adaptive off to pick one yourself.</string>
+
+    <string name="rows_title">Rows</string>
+    <string name="rows_settings_hint">Reorder the home rows, or call them whatever you like.</string>
+    <string name="rows_hint">Press a row to move or rename it. Rows with nothing in them stay hidden on the home screen.</string>
+    <string name="rows_position">%1$d</string>
+    <string name="rows_renamed_from">Normally \u201c%1$s\u201d</string>
+    <string name="rows_move_up">Move up</string>
+    <string name="rows_move_down">Move down</string>
+    <string name="rows_rename">Rename</string>
+    <string name="rows_reset_name">Use the original name</string>
+
+    <string name="reset_trip">Reset Most Driven</string>
+    <string name="reset_trip_hint">Forgets how often you have opened each app and starts counting again.</string>
+    <string name="trip_cleared">Most Driven reset</string>
+
+    <string name="gauge_ram">MEM</string>
+    <string name="gauge_disk">FREE</string>
+    <string name="up_for">up %1$s</string>
+    <string name="update_ready">UPDATE READY</string>
+    <string name="home_prompt">Make ASPECTS TV your home screen</string>
+
+    <string name="home_guard_label">ASPECTS TV home button</string>
+    <string name="home_guard_description">Lets ASPECTS TV answer the HOME key on televisions that wire it straight to the built-in launcher. It only ever sees which app opened a window \u2014 it cannot read what is on screen.</string>
+    <string name="home_takeover">HOME button takeover</string>
+    <string name="home_takeover_disable">Turn it off now</string>
+    <string name="home_takeover_open">Open Accessibility settings</string>
+    <string name="home_takeover_stopped">HOME takeover turned off. The HOME key goes back to your TV\'s own launcher.</string>
+    <string name="home_takeover_on">Active. The HOME key returns here.</string>
+    <string name="home_takeover_off">Your TV wires HOME to its own launcher. Press to enable ASPECTS TV under Accessibility, then HOME will come back here.</string>
 
     <string name="settings_title">ASPECTS TV settings</string>
-    <string name="accent_colour">Accent colour</string>
+    <string name="drive_mode">Drive Mode</string>
+    <string name="wallpaper">Wallpaper</string>
+    <string name="wallpaper_hint">Use your own picture instead of the Drive Mode background.</string>
+    <string name="wallpaper_custom">Custom</string>
+    <string name="wallpaper_none">Drive Mode</string>
+    <string name="wallpaper_dim">Wallpaper dim</string>
+    <string name="wallpaper_dim_hint">How much of the Drive Mode colour sits over your picture. More dim, more readable.</string>
+    <string name="percent">%1$d%%</string>
+    <string name="wallpaper_scanning">Looking for pictures\u2026</string>
+    <string name="wallpaper_saving">Saving\u2026</string>
+    <string name="wallpaper_applied">Wallpaper applied</string>
+    <string name="wallpaper_cleared">Back to the Drive Mode background</string>
+    <string name="wallpaper_failed">That image could not be read. Try another.</string>
+    <string name="wallpaper_empty">No pictures found. Copy some to the TV or plug in a USB stick, then come back.</string>
+    <string name="wallpaper_permission">ASPECTS TV needs permission to see your pictures.</string>
+    <string name="wallpaper_denied">Permission denied, so there is nothing to list. You can still use the Drive Mode backgrounds.</string>
+
+    <string name="backdrop">App backdrop</string>
+    <string name="backdrop_hint">Fills the screen with the focused app\'s own artwork, blurred. It shows the app, not what you were watching \u2014 no launcher can see inside Netflix.</string>
+    <string name="ignition">Ignition sequence on start-up</string>
     <string name="clock_24h">24-hour clock</string>
+    <string name="clock_gauge">Show the dial clock</string>
     <string name="show_sideloaded">Show sideloaded (non-TV) apps</string>
     <string name="show_system_row">Show the System row</string>
-    <string name="show_stats">Show system stats in the header</string>
+    <string name="show_stats">Show the instrument cluster</string>
+    <string name="parked_mode">Parked mode</string>
+    <string name="parked_hint">Dims to a clock after this long on the home screen. It cannot switch the TV off — no app is allowed to.</string>
+    <string name="hidden_apps">Hidden apps</string>
+    <string name="hidden_hint">Hidden apps stay searchable. Press to restore them all.</string>
+    <string name="hidden_none">Nothing is hidden yet. Hold OK on any app to hide it.</string>
+    <string name="hidden_restored">All apps restored to the home screen</string>
     <string name="set_default_home">Set ASPECTS TV as the home screen</string>
+    <string name="minutes">%1$d min</string>
+
+    <string name="state_on">ON</string>
+    <string name="state_off">OFF</string>
 
     <string name="action_open">Open</string>
     <string name="action_pin">Add to Favourites</string>
     <string name="action_unpin">Remove from Favourites</string>
+    <string name="action_move_left">Move left</string>
+    <string name="action_move_right">Move right</string>
+    <string name="action_hide">Hide from home</string>
     <string name="action_info">App info</string>
     <string name="action_uninstall">Uninstall</string>
 
+    <string name="tile_search">Search</string>
     <string name="tile_settings">Settings</string>
     <string name="tile_network">Network</string>
     <string name="tile_display">Display</string>
@@ -31,9 +102,24 @@
     <string name="tile_home">Home app</string>
     <string name="tile_launcher">Theme</string>
 
-    <string name="state_on">ON</string>
-    <string name="state_off">OFF</string>
+    <string name="search_hint">Search your apps</string>
 
     <string name="no_apps">No apps found. Open Settings to check installed apps.</string>
     <string name="cant_open">Couldn\'t open that screen on this TV.</string>
+
+    <plurals name="search_results">
+        <item quantity="one">%d APP</item>
+        <item quantity="other">%d APPS</item>
+    </plurals>
+
+    <plurals name="wallpaper_found">
+        <item quantity="one">%d picture</item>
+        <item quantity="other">%d pictures</item>
+    </plurals>
+
+    <plurals name="hidden_count">
+        <item quantity="zero">None</item>
+        <item quantity="one">%d app</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
 </resources>

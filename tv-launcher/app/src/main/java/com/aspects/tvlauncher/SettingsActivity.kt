@@ -1,6 +1,7 @@
 package com.aspects.tvlauncher
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -16,56 +17,189 @@ class SettingsActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private lateinit var container: LinearLayout
-    private var accent = Accents.at(0).color
+    private var mode = DriveMode.NIGHT
+    private var guardEnabled = false
+    private var wallpaperSet = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        accent = Accents.at(prefs.accent).color
+        mode = prefs.mode
         setContentView(R.layout.activity_settings)
 
-        findViewById<View>(R.id.glow).background = ThemeKit.headerGlow(accent)
-        container = findViewById(R.id.container)
-        findViewById<TextView>(R.id.about).text = about()
+        findViewById<DriveBackgroundView>(R.id.background).mode = mode
+        findViewById<TextView>(R.id.heading).setTextColor(mode.ink)
 
+        val about = findViewById<TextView>(R.id.about)
+        about.setTextColor(mode.dim)
+        about.text = about()
+
+        container = findViewById(R.id.container)
+        guardEnabled = HomeGuardService.isEnabled(this)
+        wallpaperSet = Wallpaper.exists(this)
         build()
         container.post { container.getChildAt(0)?.requestFocus() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The user may have just switched the service on in Accessibility.
+        val now = HomeGuardService.isEnabled(this)
+        if (now != guardEnabled || wallpaperSet != Wallpaper.exists(this)) {
+            guardEnabled = now
+            wallpaperSet = Wallpaper.exists(this)
+            build()
+        }
     }
 
     private fun build() {
         container.removeAllViews()
 
-        // Cycling through accents on OK beats a nested swatch strip: one button,
-        // no second focus axis to get lost in with a D-pad.
+        addRow(
+            R.drawable.ic_home,
+            getString(R.string.home_takeover),
+            stateLabel(guardEnabled),
+            getString(if (guardEnabled) R.string.home_takeover_on else R.string.home_takeover_off),
+            guardEnabled
+        ) {
+            if (guardEnabled) offerTakeoverOptions() else openAccessibility()
+        }
+
+        // Cycling on OK beats a nested swatch strip: one button, no second focus
+        // axis to get lost in with a D-pad.
         addRow(
             R.drawable.ic_star,
-            getString(R.string.accent_colour),
-            Accents.at(prefs.accent).name
+            getString(R.string.drive_mode),
+            if (prefs.adaptiveMode) getString(R.string.adaptive_value) else mode.label,
+            if (prefs.adaptiveMode) getString(R.string.adaptive_active) else mode.blurb
         ) {
-            prefs.accent = Accents.next(prefs.accent)
+            prefs.driveMode = DriveMode.next(prefs.driveMode)
             recreate()
         }
 
-        addToggle(R.drawable.ic_clock, getString(R.string.clock_24h), prefs.clock24h) {
-            prefs.clock24h = it
-        }
-        addToggle(R.drawable.ic_apps, getString(R.string.show_sideloaded), prefs.showSideloaded) {
-            prefs.showSideloaded = it
-        }
-        addToggle(R.drawable.ic_tune, getString(R.string.show_system_row), prefs.showSystemRow) {
-            prefs.showSystemRow = it
-        }
-        addToggle(R.drawable.ic_memory, getString(R.string.show_stats), prefs.showStats) {
-            prefs.showStats = it
+        addToggle(
+            R.drawable.ic_clock, getString(R.string.adaptive_mode),
+            getString(R.string.adaptive_hint), prefs.adaptiveMode
+        ) {
+            prefs.adaptiveMode = it
         }
 
-        addRow(R.drawable.ic_home, getString(R.string.set_default_home), "") {
+        addRow(
+            R.drawable.ic_apps,
+            getString(R.string.rows_title),
+            "",
+            getString(R.string.rows_settings_hint)
+        ) {
+            startActivity(Intent(this, RowsActivity::class.java))
+        }
+
+        addRow(
+            R.drawable.ic_signal,
+            getString(R.string.reset_trip),
+            "",
+            getString(R.string.reset_trip_hint)
+        ) {
+            prefs.clearLaunches()
+            Toast.makeText(this, R.string.trip_cleared, Toast.LENGTH_SHORT).show()
+        }
+
+        addRow(
+            R.drawable.ic_display,
+            getString(R.string.wallpaper),
+            getString(
+                if (Wallpaper.exists(this)) R.string.wallpaper_custom else R.string.wallpaper_none
+            ),
+            getString(R.string.wallpaper_hint)
+        ) {
+            startActivity(Intent(this, WallpaperActivity::class.java))
+        }
+
+        if (Wallpaper.exists(this)) {
+            addDimCycler()
+        }
+
+        addToggle(
+            R.drawable.ic_display, getString(R.string.backdrop),
+            getString(R.string.backdrop_hint), prefs.backdrop
+        ) {
+            prefs.backdrop = it
+        }
+        addToggle(R.drawable.ic_signal, getString(R.string.ignition), null, prefs.ignition) {
+            prefs.ignition = it
+        }
+        addToggle(R.drawable.ic_clock, getString(R.string.clock_24h), null, prefs.clock24h) {
+            prefs.clock24h = it
+        }
+        addToggle(R.drawable.ic_clock, getString(R.string.clock_gauge), null, prefs.clockGauge) {
+            prefs.clockGauge = it
+        }
+        addToggle(R.drawable.ic_memory, getString(R.string.show_stats), null, prefs.showStats) {
+            prefs.showStats = it
+        }
+        addToggle(R.drawable.ic_apps, getString(R.string.show_sideloaded), null, prefs.showSideloaded) {
+            prefs.showSideloaded = it
+        }
+        addToggle(R.drawable.ic_tune, getString(R.string.show_system_row), null, prefs.showSystemRow) {
+            prefs.showSystemRow = it
+        }
+
+        addCycler(
+            R.drawable.ic_display, getString(R.string.parked_mode),
+            getString(R.string.parked_hint), PARKED_STEPS
+        ) { prefs.parkedMinutes }
+
+        val hiddenCount = prefs.hidden.size
+        addRow(
+            R.drawable.ic_info,
+            getString(R.string.hidden_apps),
+            resources.getQuantityString(R.plurals.hidden_count, hiddenCount, hiddenCount),
+            getString(R.string.hidden_hint)
+        ) {
+            if (hiddenCount == 0) {
+                Toast.makeText(this, R.string.hidden_none, Toast.LENGTH_SHORT).show()
+            } else {
+                prefs.clearHidden()
+                Toast.makeText(this, R.string.hidden_restored, Toast.LENGTH_SHORT).show()
+                build()
+            }
+        }
+
+        addRow(R.drawable.ic_home, getString(R.string.set_default_home), "", null) {
             openHomePicker()
         }
     }
 
-    private fun addRow(glyphRes: Int, title: String, value: String, onClick: () -> Unit) {
-        val row = inflateRow(glyphRes, title, value)
+    // ------------------------------------------------------------------ rows
+
+    /** Steps the wallpaper dim through fixed levels; only shown when one is set. */
+    private fun addDimCycler() {
+        val row = inflateRow(
+            R.drawable.ic_tune,
+            getString(R.string.wallpaper_dim),
+            getString(R.string.percent, prefs.wallpaperDim),
+            getString(R.string.wallpaper_dim_hint)
+        )
+        val value = row.findViewById<TextView>(R.id.value)
+        row.setOnClickListener {
+            val at = DIM_STEPS.indexOf(prefs.wallpaperDim).let { if (it < 0) 0 else it }
+            val next = DIM_STEPS[(at + 1) % DIM_STEPS.size]
+            prefs.wallpaperDim = next
+            value.text = getString(R.string.percent, next)
+        }
+        container.addView(row)
+    }
+
+    private fun addRow(
+        glyphRes: Int,
+        title: String,
+        value: String,
+        subtitle: String?,
+        highlight: Boolean = true,
+        onClick: () -> Unit
+    ) {
+        val row = inflateRow(glyphRes, title, value, subtitle)
+        row.findViewById<TextView>(R.id.value)
+            .setTextColor(if (highlight) mode.glow else mode.dim)
         row.setOnClickListener { onClick() }
         container.addView(row)
     }
@@ -73,45 +207,121 @@ class SettingsActivity : Activity() {
     private fun addToggle(
         glyphRes: Int,
         title: String,
+        subtitle: String?,
         initial: Boolean,
         onChange: (Boolean) -> Unit
     ) {
         var state = initial
-        val row = inflateRow(glyphRes, title, stateLabel(state))
+        val row = inflateRow(glyphRes, title, stateLabel(state), subtitle)
         val value = row.findViewById<TextView>(R.id.value)
-        value.setTextColor(if (state) accent else MUTED)
+        value.setTextColor(if (state) mode.glow else mode.dim)
         row.setOnClickListener {
             state = !state
             onChange(state)
             value.text = stateLabel(state)
-            value.setTextColor(if (state) accent else MUTED)
+            value.setTextColor(if (state) mode.glow else mode.dim)
         }
         container.addView(row)
     }
 
-    private fun inflateRow(glyphRes: Int, title: String, value: String): View {
+    /** Steps through a fixed list of minute values on each press. */
+    private fun addCycler(
+        glyphRes: Int,
+        title: String,
+        subtitle: String?,
+        steps: IntArray,
+        current: () -> Int
+    ) {
+        val row = inflateRow(glyphRes, title, minutesLabel(current()), subtitle)
+        val value = row.findViewById<TextView>(R.id.value)
+        value.setTextColor(if (current() > 0) mode.glow else mode.dim)
+        row.setOnClickListener {
+            val at = steps.indexOf(current()).let { if (it < 0) 0 else it }
+            val next = steps[(at + 1) % steps.size]
+            prefs.parkedMinutes = next
+            value.text = minutesLabel(next)
+            value.setTextColor(if (next > 0) mode.glow else mode.dim)
+        }
+        container.addView(row)
+    }
+
+    private fun inflateRow(
+        glyphRes: Int,
+        title: String,
+        value: String,
+        subtitle: String?
+    ): View {
         val row = LayoutInflater.from(this).inflate(R.layout.item_setting, container, false)
-        row.background = ThemeKit.cardSelector(this, accent, 16f)
+        row.background = ThemeKit.cardSelector(this, mode, 16f)
         row.outlineProvider = ThemeKit.roundedOutline(this, 16f)
         row.clipToOutline = true
 
         val glyph = row.findViewById<ImageView>(R.id.glyph)
         glyph.setImageResource(glyphRes)
-        glyph.setColorFilter(accent)
+        glyph.setColorFilter(mode.glow)
 
-        row.findViewById<TextView>(R.id.title).text = title
+        val titleView = row.findViewById<TextView>(R.id.title)
+        titleView.text = title
+        titleView.setTextColor(mode.ink)
+
+        val subtitleView = row.findViewById<TextView>(R.id.subtitle)
+        if (subtitle.isNullOrBlank()) {
+            subtitleView.visibility = View.GONE
+        } else {
+            subtitleView.visibility = View.VISIBLE
+            subtitleView.text = subtitle
+            subtitleView.setTextColor(mode.dim)
+        }
 
         val valueView = row.findViewById<TextView>(R.id.value)
         valueView.text = value
-        valueView.setTextColor(accent)
+        valueView.setTextColor(mode.glow)
         return row
     }
 
     private fun stateLabel(on: Boolean): String =
         getString(if (on) R.string.state_on else R.string.state_off)
 
-    /** Opens the system's home-app picker so you can make this the real home screen. */
+    private fun minutesLabel(minutes: Int): String =
+        if (minutes <= 0) getString(R.string.state_off)
+        else getString(R.string.minutes, minutes)
+
+    /** Opens the system home-app picker; we can only ever ask, never switch. */
+    /**
+     * Once the takeover is running, offer to stop it from here as well as from
+     * system Settings. A service can disable itself, so this remains a way out
+     * even if something has made the Settings app hard to reach.
+     */
+    private fun offerTakeoverOptions() {
+        val choices = arrayOf(
+            getString(R.string.home_takeover_disable),
+            getString(R.string.home_takeover_open)
+        )
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(R.string.home_takeover)
+            .setItems(choices) { _, which ->
+                if (which == 0 && HomeGuardService.stopTakeover()) {
+                    guardEnabled = false
+                    build()
+                    Toast.makeText(this, R.string.home_takeover_stopped, Toast.LENGTH_LONG).show()
+                } else {
+                    openAccessibility()
+                }
+            }
+            .show()
+    }
+
+    private fun openAccessibility() {
+        HomeGuardService.expectExternalLaunch()
+        try {
+            startActivity(HomeGuardService.settingsIntent())
+        } catch (failed: Exception) {
+            Toast.makeText(this, R.string.cant_open, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun openHomePicker() {
+        HomeGuardService.expectExternalLaunch()
         val intent = Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             startActivity(intent)
@@ -128,6 +338,7 @@ class SettingsActivity : Activity() {
 
     private fun about(): String = buildString {
         append(getString(R.string.app_name)).append("  v").append(BuildConfig.VERSION_NAME)
+        append("  (build ").append(BuildConfig.VERSION_CODE).append(')')
         append('\n')
         append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
         append('\n')
@@ -135,9 +346,16 @@ class SettingsActivity : Activity() {
         append("  (API ").append(Build.VERSION.SDK_INT).append(')')
         append('\n')
         append("Build ").append(Build.DISPLAY)
+        // Moved off the home screen but kept where it is genuinely wanted: this
+        // is the number you need to reach the TV over ADB.
+        SystemStats.read(this@SettingsActivity).ip?.let {
+            append('\n')
+            append("IP ").append(it)
+        }
     }
 
     private companion object {
-        const val MUTED = 0xFF8B93A2.toInt()
+        val PARKED_STEPS = intArrayOf(0, 15, 30, 60, 90)
+        val DIM_STEPS = intArrayOf(0, 25, 40, 55, 70, 85)
     }
 }
