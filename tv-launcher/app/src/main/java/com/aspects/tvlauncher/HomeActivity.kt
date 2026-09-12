@@ -16,8 +16,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -32,6 +34,12 @@ import java.util.Locale
 import java.util.concurrent.Executors
 
 class HomeActivity : Activity() {
+
+    /** Runs before any view exists, which is the only point the size can be set. */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(DisplaySize.wrap(base))
+    }
+
 
     private lateinit var prefs: Prefs
     private lateinit var icons: IconLoader
@@ -54,6 +62,9 @@ class HomeActivity : Activity() {
     private lateinit var gaugeNet: GaugeView
     private lateinit var lamps: LinearLayout
     private lateinit var bloom: View
+
+    /** The size the views were measured at; a change means we must lay out again. */
+    private var builtAtSize = DisplaySize.LARGE
     private lateinit var parked: View
     private lateinit var parkedClock: TextView
     private lateinit var homePrompt: LinearLayout
@@ -105,6 +116,7 @@ class HomeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        builtAtSize = prefs.displaySize
         icons = IconLoader(this)
         art = Backdrop(this)
         setContentView(R.layout.activity_home)
@@ -150,6 +162,12 @@ class HomeActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // A measured view will not re-measure at a new density, so the whole
+        // activity has to be built again rather than merely refreshed.
+        if (builtAtSize != prefs.displaySize) {
+            recreate()
+            return
+        }
         applyModeIfChanged()
         applyWallpaper()
         refreshApps()
@@ -165,7 +183,7 @@ class HomeActivity : Activity() {
         super.onPause()
         ui.removeCallbacks(ticker)
         ui.removeCallbacks(parkRunnable)
-        leaveParked()
+        snapOutOfParked()
         runCatching { unregisterReceiver(packageWatcher) }
     }
 
@@ -179,6 +197,32 @@ class HomeActivity : Activity() {
         icons.shutdown()
         art.shutdown()
         io.shutdownNow()
+    }
+
+    /**
+     * The key that wakes the screen should only wake the screen. Without this it
+     * would also land on whatever card had focus when the launcher faded, so
+     * pressing a direction to bring the rows back could open an app instead.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Key events can arrive before onCreate has bound the views, and
+        // touching a lateinit field before then throws.
+        val parkedNow = ::parked.isInitialized && parked.visibility == View.VISIBLE
+        if (parkedNow && event.action == KeyEvent.ACTION_DOWN && wakesTheScreen(event.keyCode)) {
+            leaveParked()
+            schedulePark()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** Volume and power belong to the television, not to us. */
+    private fun wakesTheScreen(keyCode: Int): Boolean = when (keyCode) {
+        KeyEvent.KEYCODE_VOLUME_UP,
+        KeyEvent.KEYCODE_VOLUME_DOWN,
+        KeyEvent.KEYCODE_VOLUME_MUTE,
+        KeyEvent.KEYCODE_POWER -> false
+        else -> true
     }
 
     /** Fires on every key press and touch: our skip button and our idle reset. */
@@ -230,7 +274,10 @@ class HomeActivity : Activity() {
         gaugeNet.label = getString(R.string.gauge_net)
 
         homePrompt.background = ThemeKit.panel(this, mode)
-        parked.setBackgroundColor(ThemeKit.withAlpha(mode.ground, 0.94f))
+        // A veil, not a sheet. The old value hid the very picture this screen
+        // exists to show; this is just enough to keep the clock legible over a
+        // bright photo.
+        parked.setBackgroundColor(ThemeKit.withAlpha(mode.ground, 0.22f))
 
         listOf(R.id.titleFav, R.id.titleTv, R.id.titleAll, R.id.titleSys).forEach {
             findViewById<TextView>(it).setTextColor(mode.dim)
@@ -296,20 +343,80 @@ class HomeActivity : Activity() {
         if (minutes > 0) ui.postDelayed(parkRunnable, minutes * 60_000L)
     }
 
+    /**
+     * Fades the launcher away and leaves the picture.
+     *
+     * Everything that belongs to the launcher goes: the rows, the cluster, the
+     * focused app's artwork. What stays is the wallpaper, or the painted Drive
+     * Mode background when no wallpaper is set, with the clock over it.
+     *
+     * The fade out is slow and the fade back is quick on purpose. Leaving should
+     * feel like the screen settling; returning should feel immediate, because by
+     * then you have already pressed a key and are waiting on it.
+     */
     private fun enterParked() {
         if (isFinishing || isDestroyed) return
+        if (parked.visibility == View.VISIBLE) return
         updateClock()
+
+        parked.animate().cancel()
         parked.visibility = View.VISIBLE
         parked.alpha = 0f
-        parked.animate().alpha(1f).setDuration(900L).start()
-        setBrightness(0.05f)
+        parked.animate()
+            .alpha(1f)
+            .setDuration(FADE_OUT_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+
+        fadeTo(scroller, 0f, FADE_OUT_MS)
+        fadeTo(backdrop, 0f, FADE_OUT_MS)
+        fadeTo(scrim, 0f, FADE_OUT_MS)
+
+        setBrightness(PARKED_BRIGHTNESS)
     }
 
     private fun leaveParked() {
         if (parked.visibility != View.VISIBLE) return
+
+        parked.animate().cancel()
+        parked.animate()
+            .alpha(0f)
+            .setDuration(FADE_IN_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction { parked.visibility = View.GONE }
+            .start()
+
+        fadeTo(scroller, 1f, FADE_IN_MS)
+        // The artwork belongs to whichever card holds focus, so it is put back
+        // to its resting state rather than to whatever alpha it happened to
+        // have when the screen faded.
+        clearBackdrop()
+
+        setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+    }
+
+    /**
+     * Snaps out of the faded state instead of animating. onPause cannot rely on
+     * an animation finishing, and a fade left half-run would have the launcher
+     * come back invisible.
+     */
+    private fun snapOutOfParked() {
+        if (!::parked.isInitialized) return
         parked.animate().cancel()
         parked.visibility = View.GONE
+        parked.alpha = 0f
+        scroller.animate().cancel()
+        scroller.alpha = 1f
         setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+    }
+
+    private fun fadeTo(view: View, alpha: Float, duration: Long) {
+        view.animate().cancel()
+        view.animate()
+            .alpha(alpha)
+            .setDuration(duration)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
     }
 
     private fun setBrightness(value: Float) {
@@ -598,7 +705,7 @@ class HomeActivity : Activity() {
             TILE_HOME -> launchSettings(Settings.ACTION_HOME_SETTINGS)
             TILE_SETTINGS -> launchSettings(Settings.ACTION_SETTINGS)
             TILE_NETWORK -> launchSettings(Settings.ACTION_WIFI_SETTINGS)
-            TILE_DISPLAY -> launchSettings(Settings.ACTION_DISPLAY_SETTINGS)
+            TILE_DISPLAY -> launch(Intent(this, WallpaperActivity::class.java))
             TILE_APPS -> launchSettings(Settings.ACTION_APPLICATION_SETTINGS)
             TILE_STORAGE -> launchSettings(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)
             TILE_DATETIME -> launchSettings(Settings.ACTION_DATE_SETTINGS)
@@ -862,6 +969,17 @@ class HomeActivity : Activity() {
         const val BACKDROP_DELAY_MS = 220L
         const val NET_FULL_SCALE = 25.0
         const val DRIVEN_LIMIT = 8
+
+        /** Slow going, quick coming back: leaving should settle, returning should not. */
+        const val FADE_OUT_MS = 1600L
+        const val FADE_IN_MS = 380L
+
+        /**
+         * Dim, but nowhere near off. The point of this screen is that the
+         * picture stays visible, so the backlight only drops far enough to
+         * spare the panel and the electricity bill.
+         */
+        const val PARKED_BRIGHTNESS = 0.45f
 
         // Warning-lamp colours are semantic, not themed.
         const val LAMP_RED = 0xFFFF3B30.toInt()

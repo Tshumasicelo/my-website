@@ -2,6 +2,7 @@ package com.aspects.tvlauncher
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -14,6 +15,12 @@ import android.widget.TextView
 import android.widget.Toast
 
 class SettingsActivity : Activity() {
+
+    /** Runs before any view exists, which is the only point the size can be set. */
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(DisplaySize.wrap(base))
+    }
+
 
     private lateinit var prefs: Prefs
     private lateinit var container: LinearLayout
@@ -141,6 +148,18 @@ class SettingsActivity : Activity() {
         }
         addToggle(R.drawable.ic_tune, getString(R.string.show_system_row), null, prefs.showSystemRow) {
             prefs.showSystemRow = it
+        }
+
+        addRow(
+            R.drawable.ic_tune,
+            getString(R.string.display_size),
+            getString(DisplaySize.labelRes(prefs.displaySize)),
+            getString(R.string.display_size_hint)
+        ) {
+            prefs.displaySize = DisplaySize.next(prefs.displaySize)
+            // Rebuilding shows the new size immediately, on this very screen,
+            // which is the only honest way to preview it.
+            recreate()
         }
 
         addCycler(
@@ -355,7 +374,7 @@ class SettingsActivity : Activity() {
     }
 
     private companion object {
-        val PARKED_STEPS = intArrayOf(0, 15, 30, 60, 90)
+        val PARKED_STEPS = intArrayOf(0, 1, 2, 5, 10, 30, 60)
         val DIM_STEPS = intArrayOf(0, 25, 40, 55, 70, 85)
     }
 }

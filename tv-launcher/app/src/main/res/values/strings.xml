@@ -70,8 +70,14 @@
     <string name="show_sideloaded">Show sideloaded (non-TV) apps</string>
     <string name="show_system_row">Show the System row</string>
     <string name="show_stats">Show the instrument cluster</string>
-    <string name="parked_mode">Parked mode</string>
-    <string name="parked_hint">Dims to a clock after this long on the home screen. It cannot switch the TV off — no app is allowed to.</string>
+    <string name="parked_mode">Fade to wallpaper</string>
+    <string name="parked_hint">After this long without a key press, the rows and dials fade away and leave your picture with the clock over it. Any button brings them straight back. It cannot switch the TV off — no app is allowed to.</string>
+
+    <string name="display_size">Display size</string>
+    <string name="display_size_hint">How big everything is drawn. Smaller fits more rows on the screen at once.</string>
+    <string name="size_large">Large</string>
+    <string name="size_medium">Medium</string>
+    <string name="size_small">Small</string>
     <string name="hidden_apps">Hidden apps</string>
     <string name="hidden_hint">Hidden apps stay searchable. Press to restore them all.</string>
     <string name="hidden_none">Nothing is hidden yet. Hold OK on any app to hide it.</string>
