@@ -95,7 +95,8 @@
     <string name="weather_searching">Looking it up\u2026</string>
     <string name="weather_not_found">Couldn\'t find that place, or the TV is offline. Try a nearby city.</string>
     <string name="weather_set">Weather set for %1$s</string>
-    <string name="weather_line">%1$d\u00B0  %2$s  \u00B7  %3$s</string>
+    <!-- Quoted, or Android collapses the double spaces that separate the parts. -->
+    <string name="weather_line">"%1$d\u00B0  %2$s  \u00B7  %3$s"</string>
     <string name="weather_clear">CLEAR</string>
     <string name="weather_cloud">CLOUDY</string>
     <string name="weather_fog">FOG</string>
