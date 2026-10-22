@@ -30,7 +30,10 @@
      without warning. async so a slow CDN blocks neither parsing nor DOMContentLoaded
      (defer would block the latter, booting nothing). If it lands after boot, the load
      handler below builds the charts then. -->
-<script async id="chartLib" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<!-- integrity: if the CDN ever serves different bytes, the browser refuses to run them.
+     This page holds financial data, so third-party code must be exactly what was pinned. -->
+<script async id="chartLib" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"
+        integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
 
 <style>
 /* ============================================================
@@ -769,13 +772,16 @@ select.input {
   <div class="grid grid-2">
     <div class="card">
       <div class="card-head"><h3>Backup</h3></div>
-      <p class="hint" style="margin-bottom:14px;">Your data lives only in this browser. Export regularly — clearing site data erases everything.</p>
+      <p class="hint" style="margin-bottom:14px;">Your data lives only in this browser and is never uploaded — anyone using this browser profile can see it. Export regularly: clearing site data erases everything.</p>
       <div class="row" style="gap:9px;">
         <button class="btn btn-primary btn-block" id="exportBtn">⬇ Export JSON</button>
         <button class="btn btn-ghost btn-block" id="importBtn">⬆ Import</button>
       </div>
+      <button class="btn btn-ghost btn-block" id="csvBtn" style="margin-top:9px;">⬇ Transactions as CSV</button>
       <input type="file" id="importFile" accept="application/json,.json" class="sr-only" aria-label="Choose a backup file">
       <p class="hint" id="storageInfo" style="margin-top:12px;"></p>
+      <p class="hint" id="storageHealth" style="margin-top:6px;"></p>
+      <button class="btn btn-danger btn-sm" id="rescueBtn" style="margin-top:9px;" hidden>⬇ Download unreadable data</button>
     </div>
 
     <div class="card">
@@ -794,10 +800,20 @@ select.input {
   </div>
 
   <div class="card">
-    <div class="card-head"><h3>Install as an app</h3><span class="card-sub spacer" id="installStatus"></span></div>
+    <div class="card-head"><h3>Install &amp; updates</h3><span class="card-sub spacer" id="installStatus"></span></div>
     <p class="hint" style="margin-bottom:14px;">Add ASPECTS to your home screen. It opens full screen with no browser bars, and works with no internet at all.</p>
     <button class="btn btn-primary" id="installBtn" hidden>⬇ Install ASPECTS</button>
     <p class="hint" id="installHint"></p>
+    <div class="row row-wrap" style="gap:9px; margin-top:16px; align-items:center;">
+      <div style="flex:1; min-width:180px;">
+        <div style="font-weight:600; font-size:14px;">Version <span class="tnum" id="appVersion"></span></div>
+        <div class="hint" id="updateStatus"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="checkUpdateBtn">Check for updates</button>
+      <button class="btn btn-primary btn-sm" id="updateNowBtn" hidden>Update now</button>
+    </div>
+    <p class="hint" id="updateNotes" style="margin-top:8px;"></p>
+    <p class="hint" style="margin-top:8px;">Updating loads the newest version from the web — the installed app and the browser update the same way. Your transactions, tasks and goals stay on this device and are not touched.</p>
   </div>
 
   <div class="card">
@@ -1006,6 +1022,7 @@ select.input {
     </div>
     <div class="sheet-foot">
       <button class="btn btn-ghost" data-close>Cancel</button>
+      <button class="btn btn-primary" id="confirmAlt" data-no-enter="1" hidden></button>
       <button class="btn btn-danger" id="confirmYes">Confirm</button>
     </div>
   </div>
@@ -1026,8 +1043,15 @@ select.input {
    ============================================================ */
 
 /* ---------- Constants ---------- */
+/* The storage key says "v2" for historical reasons. The schema version lives in
+   S.version, so this key never changes — renaming it would orphan everyone's data. */
 const KEY = "aspects.v2";
+const SCHEMA_VERSION = 2;
 const LEGACY_KEYS = ["aspects_balance", "aspects_history", "aspects_logs", "aspects_tasks", "aspects_dark"];
+
+/* Keep in step with version.json and CACHE_VERSION in sw.js
+   (scripts/check-web-app.mjs fails the build when they differ). */
+const APP_VERSION = "1.1.0";
 
 const CATS = [
   { k: "General",   e: "📦", c: "#8b93a7" },
@@ -1083,7 +1107,9 @@ const dayKey   = d => (d instanceof Date ? d : new Date(d)).toLocaleDateString("
 const todayKey = () => dayKey(new Date());
 const ymOf     = iso => dayKey(new Date(iso)).slice(0, 7);
 const thisYM   = () => todayKey().slice(0, 7);
+const ALL = "all";   // month-picker value for the whole history
 function ymLabel(ym) {
+  if (ym === ALL) return "all time";
   const [y, m] = ym.split("-").map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
@@ -1097,15 +1123,19 @@ function relDay(iso) {
 }
 function timeLabel(iso) {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " · " +
+  const opts = { day: "numeric", month: "short" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";   // history spans years
+  return d.toLocaleDateString(undefined, opts) + " · " +
          d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 /* ---------- State ---------- */
 function blankState() {
   return {
-    version: 2,
+    version: SCHEMA_VERSION,
     tx: [],          // {id, type:'income'|'expense'|'goal', amount, category, note, ts, goalId?}
+    invalidTx: [],   // rows that could not be read — kept, never counted, exported with backups
+    lastBackup: null,
     tasks: [],       // {id, title, done, priority, due, created, doneAt, amount, category, poms}
     goals: [],       // {id, name, target, created}
     budgets: {},     // category -> monthly limit
@@ -1122,35 +1152,131 @@ let charts = { trend: null, cat: null };
 let ui = { view: "overview", taskFilter: "active", txQuery: "", month: thisYM(), pri: "med",
            recurType: "income", editingRecur: null, contribGoal: null, lastBalance: null };
 
-/* ---------- Persistence ---------- */
+/* ---------- Persistence ----------
+   The rule throughout: never write over something we could not read or do not
+   understand. While saveBlocked is set nothing is written, so the stored copy
+   survives until the problem is fixed. */
+let saveBlocked = null;    // why saving is off, or null
+let storageIssue = null;   // { kind, message, raw? } — shown in Settings and once as a toast
+let legacyImported = false;
+
 function save() {
+  if (saveBlocked) return false;
   try {
     localStorage.setItem(KEY, JSON.stringify(S));
+    return true;
   } catch (err) {
-    toast("Could not save — storage may be full", "bad", "⚠️");
+    toast("Could not save — storage may be full. Export a backup now.", "bad", "⚠️");
     console.error("save failed", err);
+    return false;
   }
 }
 
 function load() {
   let raw = null;
-  try { raw = localStorage.getItem(KEY); } catch (_) { /* storage blocked */ }
-
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") return normalize(parsed);
-    } catch (err) { console.error("corrupt save, starting fresh", err); }
+  try { raw = localStorage.getItem(KEY); }
+  catch (_) {
+    storageIssue = { kind: "unavailable",
+      message: "This browser is blocking storage, so nothing you enter can be kept. Leave private browsing or allow site data." };
+    return blankState();
   }
+  if (raw) return readState(raw);
   const migrated = migrateV1();
   return migrated || blankState();
+}
+
+/* Stored text -> usable state, without ever losing the stored text. */
+function readState(raw) {
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch (_) {}
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    // Set the unreadable text aside under its own key before anything can overwrite it.
+    const rescueKey = KEY + ".unreadable-" + Date.now();
+    try { localStorage.setItem(rescueKey, raw); }
+    catch (_) { saveBlocked = "your saved data could not be read and there was no room to set it aside"; }
+    storageIssue = { kind: "unreadable", raw,
+      message: "Your saved data could not be read, so ASPECTS started empty. The original was kept — download it below and send it for recovery." };
+    console.error("unreadable save; original kept under", rescueKey);
+    return blankState();
+  }
+
+  const from = Number(parsed.version) || SCHEMA_VERSION;
+  if (from > SCHEMA_VERSION) {
+    // Saved by a newer build (this one is probably an old offline copy). Show it, but don't write.
+    saveBlocked = "this data was saved by a newer version of ASPECTS";
+    storageIssue = { kind: "newer",
+      message: "Your data was saved by a newer version of ASPECTS. Update to keep editing — nothing is saved until then." };
+    return normalize(parsed);
+  }
+  if (from < SCHEMA_VERSION) {
+    const res = migrate(raw, from);
+    if (res.ok) return res.state;
+    saveBlocked = "upgrading your data failed";
+    storageIssue = { kind: "migration",
+      message: "Upgrading your data failed (" + res.error + "). Your original data is untouched and nothing will be saved. Export a backup and report this." };
+    return normalize(parsed);
+  }
+  return normalize(parsed);
+}
+
+/* ---------- Schema migrations ----------
+   Keyed by the version they upgrade FROM; each returns the next version's object.
+   Add one whenever the shape of saved data changes — never change the shape without one.
+     e.g.  2: s => { s.tx.forEach(t => { t.currency = "ZAR"; }); return s; }        */
+const MIGRATIONS = {};
+
+function upgrade(s, from) {
+  const before = (Array.isArray(s.tx) ? s.tx.length : 0) + (Array.isArray(s.invalidTx) ? s.invalidTx.length : 0);
+  for (let v = from; v < SCHEMA_VERSION; v++) {
+    if (typeof MIGRATIONS[v] !== "function") throw new Error("no upgrade path from version " + v);
+    s = MIGRATIONS[v](s);
+  }
+  s.version = SCHEMA_VERSION;
+  const out = normalize(s);
+  if (out.tx.length + out.invalidTx.length < before) throw new Error("transactions went missing");
+  return out;
+}
+
+function migrate(raw, from) {
+  // An untouched copy first, so even a buggy migration is recoverable.
+  try { localStorage.setItem(KEY + ".pre-v" + SCHEMA_VERSION, raw); }
+  catch (_) { return { ok: false, error: "no room to keep a pre-upgrade copy" }; }
+  try { return { ok: true, state: upgrade(JSON.parse(raw), from) }; }
+  catch (err) { console.error("migration failed", err); return { ok: false, error: err.message }; }
+}
+
+/* Rows that cannot be counted (no valid type, amount or date) go to invalidTx
+   instead of being dropped, so they still travel in every JSON backup. */
+const TX_TYPES = ["income", "expense", "goal"];
+function sanitizeTx(list) {
+  const ok = [], bad = [];
+  list.forEach(t => {
+    const amount = Number(t && t.amount);
+    const when = t && (typeof t.ts === "string" || typeof t.ts === "number") ? new Date(t.ts) : null;
+    if (!t || typeof t !== "object" || !TX_TYPES.includes(t.type) ||
+        !Number.isFinite(amount) || amount < 0 || !when || isNaN(when)) {
+      bad.push(t);
+      return;
+    }
+    t.amount = amount;                   // "50" from a hand-edited file would otherwise concatenate
+    const iso = when.toISOString();      // sorting compares ts as text, so it must be ISO
+    if (t.ts !== iso) t.ts = iso;
+    if (!t.id) t.id = uid();
+    if (!t.category) t.category = "General";
+    ok.push(t);
+  });
+  return { ok, bad };
 }
 
 /* Fill in anything a older/partial save is missing so render never hits undefined. */
 function normalize(s) {
   const base = blankState();
   const out = Object.assign(base, s);
-  out.tx        = Array.isArray(s.tx) ? s.tx : [];
+  const { ok, bad } = sanitizeTx(Array.isArray(s.tx) ? s.tx : []);
+  if (s.tx != null && !Array.isArray(s.tx)) bad.push(s.tx);
+  out.tx        = ok;
+  out.invalidTx = (Array.isArray(s.invalidTx) ? s.invalidTx : []).concat(bad);
   out.tasks     = Array.isArray(s.tasks) ? s.tasks : [];
   out.goals     = Array.isArray(s.goals) ? s.goals : [];
   out.recurring = Array.isArray(s.recurring) ? s.recurring : [];
@@ -1228,9 +1354,14 @@ function migrateV1() {
   }
 
   s.migratedAt = nowISO();
-  try { LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
+  // The old keys are removed by boot() only once the new copy is safely written.
+  legacyImported = true;
   setTimeout(() => toast("Imported your previous data ✨", "good", "📦"), 700);
   return s;
+}
+
+function clearLegacyKeys() {
+  try { LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
 }
 
 /* ============================================================
@@ -1246,7 +1377,7 @@ function monthsPresent() {
   set.add(thisYM());
   return Array.from(set).sort().reverse();
 }
-const txInMonth = ym => S.tx.filter(t => ymOf(t.ts) === ym);
+const txInMonth = ym => ym === ALL ? S.tx.slice() : S.tx.filter(t => ymOf(t.ts) === ym);
 
 function monthStats(ym) {
   const rows = txInMonth(ym);
@@ -1370,15 +1501,15 @@ function toast(msg, kind = "info", emoji = "", action = null) {
     btn.textContent = action.label;
     btn.addEventListener("click", () => { el.remove(); action.run(); });
     el.appendChild(btn);
-    el.dataset.sticky = "1";
+    if (!action.ttl) el.dataset.sticky = "1";   // an offer like Undo may lapse; a question may not
   }
 
   host.appendChild(el);
-  if (!action) {
+  if (!action || action.ttl) {
     setTimeout(() => {
       el.classList.add("out");
       setTimeout(() => el.remove(), 260);
-    }, 3200);
+    }, action ? action.ttl : 3200);
   }
   while (host.querySelectorAll(".toast:not([data-sticky])").length > 4) {
     host.querySelector(".toast:not([data-sticky])").remove();
@@ -1566,8 +1697,9 @@ function taskRowCompact(t) {
 function renderMoney() {
   const picker = $("#monthPicker");
   const months = monthsPresent();
-  if (!months.includes(ui.month)) ui.month = months[0];
-  picker.innerHTML = months.map(m => '<option value="' + esc(m) + '"' + (m === ui.month ? " selected" : "") + ">" + esc(ymLabel(m)) + "</option>").join("");
+  if (ui.month !== ALL && !months.includes(ui.month)) ui.month = months[0];
+  picker.innerHTML = '<option value="' + ALL + '"' + (ui.month === ALL ? " selected" : "") + ">All time</option>" +
+    months.map(m => '<option value="' + esc(m) + '"' + (m === ui.month ? " selected" : "") + ">" + esc(ymLabel(m)) + "</option>").join("");
 
   const m = monthStats(ui.month);
   $("#ledgerTiles").innerHTML =
@@ -1589,10 +1721,11 @@ function renderMoney() {
       }).join("")
     : '<p class="hint" style="text-align:center">No spending recorded in ' + esc(ymLabel(ui.month)) + "</p>";
 
-  // Budgets (full)
+  // Budgets (full) — limits are monthly, so "All time" compares against this month
   const bk = Object.keys(S.budgets).filter(k => S.budgets[k] > 0);
+  const budgetSpend = ui.month === ALL ? spendByCategory(thisYM()) : spend;
   $("#budgetFull").innerHTML = bk.length
-    ? bk.map(k => budgetRow(k, spend[k] || 0, S.budgets[k])).join("")
+    ? bk.map(k => budgetRow(k, budgetSpend[k] || 0, S.budgets[k])).join("")
     : emptyState("🧧", "No envelopes yet", "Set a monthly cap per category and watch the bars");
 
   // Recurring
@@ -1619,7 +1752,7 @@ function renderMoney() {
   $("#txCount").textContent = rows.length + (rows.length === 1 ? " entry" : " entries");
   $("#txList").innerHTML = rows.length
     ? rows.map(txRow).join("")
-    : emptyState(q ? "🔍" : "🧾", q ? "Nothing matches “" + q + "”" : "No transactions in " + ymLabel(ui.month),
+    : emptyState(q ? "🔍" : "🧾", q ? "Nothing matches “" + q + "”" : ui.month === ALL ? "No transactions yet" : "No transactions in " + ymLabel(ui.month),
                  q ? "Try a different search" : "Add one with the buttons above");
 }
 
@@ -1738,10 +1871,14 @@ function renderSettings() {
   try {
     const bytes = new Blob([JSON.stringify(S)]).size;
     $("#storageInfo").textContent = S.tx.length + " transactions · " + S.tasks.length + " tasks · " +
-      S.goals.length + " goals · " + (bytes / 1024).toFixed(1) + " KB stored";
+      S.goals.length + " goals · " + (bytes / 1024).toFixed(1) + " KB stored" +
+      (S.invalidTx.length ? " · " + S.invalidTx.length + " unreadable rows kept aside" : "") +
+      " · last backup " + (S.lastBackup ? relDay(S.lastBackup) : "never");
   } catch (_) { $("#storageInfo").textContent = ""; }
 
+  renderStorageHealth();
   renderInstall();
+  renderUpdate();
   $("#shortcutList").innerHTML = SHORTCUT_HELP
     .map(s => '<div class="shortcut-row"><span>' + esc(s[1]) + "</span><kbd>" + esc(s[0]) + "</kbd></div>").join("");
 }
@@ -1882,9 +2019,58 @@ function rebuildCharts() {
    MUTATIONS
    ============================================================ */
 function commit(msg, kind, emoji) {
-  save();
+  const saved = save();
   render();
-  if (msg) toast(msg, kind || "info", emoji || "");
+  // Never say "recorded" about something that was not.
+  if (!saved && saveBlocked) toast("Not saved — " + saveBlocked + ". See Settings.", "bad", "⚠️");
+  else if (msg) toast(msg, kind || "info", emoji || "");
+  if (saved && S.tx.length) requestPersistence();
+}
+
+/* ---------- Storage health ----------
+   Browsers may evict site data under storage pressure (and Safari after 7 days
+   without a visit, unless added to the Home Screen). persist() asks to be exempt. */
+let persisted = null, askedPersist = false;
+
+async function checkPersistence(ask) {
+  if (!navigator.storage || !navigator.storage.persisted) return;
+  try {
+    persisted = await navigator.storage.persisted();
+    if (!persisted && ask && navigator.storage.persist) persisted = await navigator.storage.persist();
+  } catch (_) {}
+  renderStorageHealth();
+}
+
+function requestPersistence() {
+  // Asked on the first real save, not at load: Firefox shows a prompt, which
+  // makes sense once there is something worth keeping.
+  if (persisted !== false || askedPersist) return;
+  askedPersist = true;
+  checkPersistence(true);
+}
+
+function renderStorageHealth() {
+  const el = $("#storageHealth");
+  if (!el) return;
+  $("#rescueBtn").hidden = !(storageIssue && storageIssue.raw);
+  if (storageIssue) { el.textContent = "⚠️ " + storageIssue.message; return; }
+  el.textContent = persisted === true
+    ? "🔒 This browser has agreed to keep your data even when the device is low on space."
+    : persisted === false
+      ? "The browser may clear this data if the device runs low on space — and Safari can after 7 days without a visit unless ASPECTS is on the Home Screen. Installing the app and exporting backups protect it."
+      : "";
+}
+
+function reportStorageIssue() {
+  if (!storageIssue) return;
+  const action = storageIssue.raw ? { label: "Download it", run: downloadUnreadable }
+               : storageIssue.kind === "newer" ? { label: "Update now", run: applyUpdate }
+               : null;
+  setTimeout(() => toast(storageIssue.message, "bad", "⚠️", action), 600);
+}
+
+function downloadUnreadable() {
+  if (storageIssue && storageIssue.raw) downloadFile("aspects-unreadable-data-" + todayKey() + ".txt", storageIssue.raw, "text/plain");
 }
 
 function addTx({ type, amount, category, note, ts, goalId }) {
@@ -1902,7 +2088,12 @@ function deleteTx(id) {
   const i = S.tx.findIndex(t => t.id === id);
   if (i < 0) return;
   const [row] = S.tx.splice(i, 1);
-  commit("Deleted " + money(row.amount), "info", "🗑️");
+  commit();
+  // One tap deletes, so one tap must bring it back.
+  toast("Deleted " + money(row.amount), "info", "🗑️", {
+    label: "Undo", ttl: 6000,
+    run: () => { if (!S.tx.some(t => t.id === row.id)) S.tx.push(row); commit("Restored", "good", "↩️"); }
+  });
 }
 
 function toggleTask(id) {
@@ -2084,7 +2275,9 @@ function trapFocus(e) {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 }
 
-function ask(title, body, onYes, phrase) {
+/* opts.yes relabels the confirm button; opts.alt adds a second, safer choice
+   that never needs the phrase and is never triggered by Enter. */
+function ask(title, body, onYes, phrase, opts = {}) {
   openModal("confirmModal", () => {
     $("#confirmTitle").textContent = title;
     $("#confirmBody").textContent = body;
@@ -2093,9 +2286,16 @@ function ask(title, body, onYes, phrase) {
     field.hidden = !phrase;
     input.value = "";
     if (phrase) $("#confirmPhraseWord").textContent = phrase;
+    $("#confirmYes").textContent = opts.yes || "Confirm";
     $("#confirmYes").disabled = !!phrase;
     input.oninput = () => { $("#confirmYes").disabled = input.value.trim().toUpperCase() !== phrase; };
     $("#confirmYes").onclick = () => { closeModal(); onYes(); };
+    const alt = $("#confirmAlt");
+    alt.hidden = !opts.alt;
+    if (opts.alt) {
+      alt.textContent = opts.alt.label;
+      alt.onclick = () => { closeModal(); opts.alt.run(); };
+    }
   });
 }
 
@@ -2267,19 +2467,52 @@ function applyTheme(pref) {
 /* ============================================================
    BACKUP — export / import
    ============================================================ */
-function exportData() {
+function downloadFile(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function exportData(prefix = "aspects-backup-") {
   try {
-    const payload = JSON.stringify(S, null, 2);
-    const blob = new Blob([payload], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "aspects-backup-" + todayKey() + ".json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    S.lastBackup = nowISO();
+    downloadFile(prefix + todayKey() + ".json", JSON.stringify(S, null, 2), "application/json");
+    save();
+    renderSettings();
     toast("Backup downloaded", "good", "💾");
+    return true;
+  } catch (err) {
+    console.error(err);
+    toast("Export failed", "bad", "⚠️");
+    return false;
+  }
+}
+
+/* For spreadsheets, not for restoring — only the JSON backup round-trips. */
+function exportCSV() {
+  // Text cells starting with = + - @ would run as formulas in Excel/Sheets.
+  const text = v => {
+    let s = String(v == null ? "" : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = [["Date", "Time", "Type", "Category", "Note", "Goal", "Amount", "Balance effect", "ID"]];
+  txSorted().forEach(t => {
+    const d = new Date(t.ts);
+    const goal = t.goalId ? S.goals.find(g => g.id === t.goalId) : null;
+    rows.push([
+      dayKey(d), d.toTimeString().slice(0, 5), text(t.type), text(catOf(t.category).k), text(t.note),
+      text(goal ? goal.name : ""), t.amount.toFixed(2), signed(t).toFixed(2), text(t.id)
+    ]);
+  });
+  try {
+    downloadFile("aspects-transactions-" + todayKey() + ".csv", "﻿" + rows.map(r => r.join(",")).join("\r\n"), "text/csv");
+    toast(S.tx.length + " transactions exported", "good", "📄");
   } catch (err) {
     console.error(err);
     toast("Export failed", "bad", "⚠️");
@@ -2297,19 +2530,80 @@ function importData(file) {
       toast("That does not look like an ASPECTS backup", "bad", "⚠️");
       return;
     }
-    const n = parsed.tx.length, t = Array.isArray(parsed.tasks) ? parsed.tasks.length : 0;
-    ask("Replace everything?",
-        "This backup holds " + n + " transactions and " + t + " tasks. Importing replaces all data currently in this browser.",
-        () => {
-          S = normalize(parsed);
-          applyTheme(S.theme || "dark");
-          ui.lastBalance = null;
-          applyRecurring();
-          commit("Backup restored", "good", "📦");
-        });
+    if (saveBlocked) { toast("Can't import while saving is off — " + saveBlocked, "bad", "⚠️"); return; }
+
+    const from = Number(parsed.version) || SCHEMA_VERSION;
+    if (from > SCHEMA_VERSION) { toast("That backup is from a newer version of ASPECTS — update first", "bad", "⚠️"); return; }
+    const knownBad = Array.isArray(parsed.invalidTx) ? parsed.invalidTx.length : 0;
+    let incoming;
+    try { incoming = upgrade(parsed, from); }
+    catch (err) { toast("That backup could not be read (" + err.message + ")", "bad", "⚠️"); return; }
+
+    const bad = incoming.invalidTx.length - knownBad;
+    const summary = "This backup holds " + incoming.tx.length + " transactions, " + incoming.tasks.length +
+      " tasks and " + incoming.goals.length + " goals" +
+      (bad ? " (plus " + bad + " unreadable rows, which are kept aside and not counted)" : "") + ".";
+
+    if (!S.tx.length && !S.tasks.length && !S.goals.length) {
+      ask("Restore this backup?", summary, () => replaceWith(incoming), null, { yes: "Restore" });
+      return;
+    }
+    ask("Merge or replace?",
+        summary + " Merge adds only what this browser doesn't already have — duplicates are skipped and nothing here is removed. " +
+        "Replace deletes the data in this browser and uses the backup instead; a copy of your current data is downloaded first.",
+        () => replaceWith(incoming), "REPLACE",
+        { yes: "Replace", alt: { label: "Merge", run: () => mergeIn(incoming) } });
   };
   reader.onerror = () => toast("Could not read that file", "bad", "⚠️");
   reader.readAsText(file);
+}
+
+function replaceWith(incoming) {
+  const before = S;
+  if (before.tx.length || before.tasks.length || before.goals.length) {
+    if (!exportData("aspects-before-import-")) return;   // no safety copy, no replace
+  }
+  S = incoming;
+  applyTheme(S.theme || "dark");
+  ui.lastBalance = null;
+  applyRecurring();
+  commit();
+  toast("Backup restored", "good", "📦", {
+    label: "Undo", ttl: 15000,
+    run: () => { S = before; applyTheme(S.theme || "dark"); ui.lastBalance = null; commit("Previous data put back", "info", "↩️"); }
+  });
+}
+
+/* Adds whatever `incoming` has that S lacks. A row is a duplicate if its id
+   matches, or if any of the extra fingerprints match (the same entry restored
+   on another device gets a fresh id but keeps its content). */
+function mergeList(mine, theirs, keys) {
+  const seen = keys.map(k => new Set(mine.map(k)));
+  let added = 0;
+  theirs.forEach(x => {
+    if (keys.some((k, i) => seen[i].has(k(x)))) return;
+    mine.push(x);
+    keys.forEach((k, i) => seen[i].add(k(x)));
+    added++;
+  });
+  return added;
+}
+
+function mergeIn(inc) {
+  const id = x => x.id;
+  const txPrint = t => [t.type, t.amount.toFixed(2), t.ts, t.note || "", t.goalId || ""].join("|");
+  const added = mergeList(S.tx, inc.tx, [id, txPrint]);
+  mergeList(S.goals, inc.goals, [id]);
+  mergeList(S.tasks, inc.tasks, [id]);
+  // Same name, amount and day is the same salary/rent — two copies would book it twice a month.
+  mergeList(S.recurring, inc.recurring, [id, r => [r.type, r.amount, r.note, r.day].join("|")]);
+  mergeList(S.invalidTx, inc.invalidTx, [x => JSON.stringify(x)]);
+  Object.keys(inc.budgets).forEach(k => { if (!(k in S.budgets)) S.budgets[k] = inc.budgets[k]; });
+
+  ui.lastBalance = null;
+  applyRecurring();
+  const skipped = inc.tx.length - added;
+  commit("Merged " + added + " transaction" + (added === 1 ? "" : "s") + (skipped ? " · " + skipped + " already here" : ""), "good", "🔀");
 }
 
 function nukeAll() {
@@ -2317,7 +2611,13 @@ function nukeAll() {
       "Every transaction, task, goal, budget and streak will be permanently deleted. Export a backup first if you are not certain.",
       () => {
         const theme = S.theme;                     // survives the wipe
-        try { localStorage.removeItem(KEY); LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); } catch (_) {}
+        try {
+          // Also the safety copies (KEY + ".pre-v…", ".unreadable-…"): erase means erase.
+          Object.keys(localStorage).filter(k => k === KEY || k.startsWith(KEY + ".")).forEach(k => localStorage.removeItem(k));
+          LEGACY_KEYS.forEach(k => localStorage.removeItem(k));
+        } catch (_) {}
+        saveBlocked = null;
+        storageIssue = null;
         S = blankState();
         S.theme = theme;
         ui.lastBalance = 0;
@@ -2345,7 +2645,9 @@ const COMMANDS = [
   { e: "🎯", t: "Go to Goals",         k: "4",      run: () => setView("goals") },
   { e: "⚙️", t: "Go to Settings",      k: "5",      run: () => setView("settings") },
   { e: "🌓", t: "Toggle dark / light", k: "D",      run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
-  { e: "💾", t: "Export backup",       k: "",       run: exportData },
+  { e: "💾", t: "Export backup",       k: "",       run: () => exportData() },
+  { e: "📄", t: "Export transactions as CSV", k: "", run: exportCSV },
+  { e: "✨", t: "Check for updates",   k: "",       run: () => checkForUpdates(true) },
   { e: "☢️", t: "Erase all data",      k: "",       run: nukeAll }
 ];
 
@@ -2450,7 +2752,11 @@ function wire() {
   // Settings
   $("#themeBtn").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
   $("#themeSelect").addEventListener("change", e => applyTheme(e.target.value));
-  $("#exportBtn").addEventListener("click", exportData);
+  $("#exportBtn").addEventListener("click", () => exportData());
+  $("#csvBtn").addEventListener("click", exportCSV);
+  $("#rescueBtn").addEventListener("click", downloadUnreadable);
+  $("#checkUpdateBtn").addEventListener("click", () => checkForUpdates(true));
+  $("#updateNowBtn").addEventListener("click", applyUpdate);
   $("#importBtn").addEventListener("click", () => $("#importFile").click());
   $("#importFile").addEventListener("change", e => {
     const f = e.target.files && e.target.files[0];
@@ -2522,7 +2828,8 @@ function wire() {
   document.addEventListener("keydown", e => {
     if (e.key !== "Enter" || !openSheet || openSheet.id === "paletteModal") return;
     if (e.target.tagName === "TEXTAREA") return;
-    const primary = openSheet.querySelector(".sheet-foot .btn-primary, .sheet-foot .btn-pos, .sheet-foot .btn-neg, .sheet-foot .btn-danger");
+    const primary = $$(".sheet-foot .btn-primary, .sheet-foot .btn-pos, .sheet-foot .btn-neg, .sheet-foot .btn-danger", openSheet)
+      .find(b => !b.hidden && !b.dataset.noEnter);
     if (primary && !primary.disabled) { e.preventDefault(); primary.click(); }
   });
 
@@ -2592,6 +2899,19 @@ function wire() {
     if (document.visibilityState !== "visible") return;
     if (S.pomo.endsAt) tickPomo();
     if (applyRecurring()) render();
+    if (Date.now() - upd.checkedAt > UPDATE_CHECK_EVERY) checkForUpdates(false);
+  });
+
+  // Another tab (or the installed app) saved. Adopt its copy — otherwise this
+  // tab's next save writes back a stale ledger and erases what was added there.
+  window.addEventListener("storage", e => {
+    if (e.key !== KEY || saveBlocked) return;
+    if (e.newValue == null) { const theme = S.theme; S = blankState(); S.theme = theme; }   // erased elsewhere
+    else { S = readState(e.newValue); if (storageIssue) reportStorageIssue(); }
+    ui.lastBalance = null;
+    render();
+    renderPomo();
+    if (S.pomo.endsAt && !pomoTimer) pomoTimer = setInterval(tickPomo, 1000);
   });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (S.theme === "system") applyTheme("system");
@@ -2635,16 +2955,135 @@ function renderInstall() {
   }
 }
 
-function promptUpdate(worker) {
-  toast("A new version is ready", "info", "✨", {
-    label: "Reload",
-    run: () => worker.postMessage("SKIP_WAITING")
-  });
+/* ============================================================
+   UPDATES
+   ASPECTS is a static site on GitHub Pages, so updating means loading the
+   newest index.html and letting the service worker refresh its offline copy.
+   version.json, published alongside, says which version is live; APP_VERSION
+   says which one is running. Data lives in localStorage, which neither a
+   reload nor a new service worker ever touches.
+   ============================================================ */
+const UPDATE_CHECK_EVERY = 30 * 60 * 1000;
+const UPDATING_TO = "aspects.updatingTo";   // sessionStorage: lets the reloaded page confirm the result
+const upd = { reg: null, waiting: null, latest: null, checking: false, checkedAt: 0, error: "", told: "", quiet: false };
+
+function newerThan(a, b) {
+  const pa = String(a).split(".").map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+const liveIsNewer = () => !!(upd.latest && newerThan(upd.latest.version, APP_VERSION));
+
+async function checkForUpdates(manual) {
+  if (upd.checking) return;
+  if (!navigator.onLine) {
+    upd.error = "Offline — can't check for updates";
+    renderUpdate();
+    if (manual) toast("You're offline — connect to check for updates", "info", "📶");
+    return;
+  }
+  upd.checking = true;
+  upd.error = "";
+  renderUpdate();
+  try {
+    if (upd.reg) await upd.reg.update().catch(() => {});   // re-fetches sw.js, bypassing the HTTP cache
+    // The unique query keeps every cache layer — HTTP, CDN, older service workers — out of the answer.
+    const res = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const info = await res.json();
+    if (!info || typeof info.version !== "string") throw new Error("version.json has no version");
+    upd.latest = info;
+    upd.checkedAt = Date.now();
+  } catch (err) {
+    console.warn("update check failed", err);
+    upd.error = "Couldn't reach the update server";
+  }
+  upd.checking = false;
+  if (upd.reg && upd.reg.waiting && navigator.serviceWorker.controller) upd.waiting = upd.reg.waiting;
+  settleUpdate();
+
+  if (manual) {
+    if (upd.error) toast(upd.error + " — try again later", "bad", "⚠️");
+    else if (!liveIsNewer() && !upd.waiting) toast("You're on the latest version (" + APP_VERSION + ")", "good", "✅");
+  }
+}
+
+/* Decides what an update state means and tells the user once. */
+function settleUpdate() {
+  if (upd.waiting && upd.latest && !liveIsNewer()) {
+    // Navigation is network-first, so this page is often already the newest
+    // build and only the offline copy lags. Swap that in quietly, no reload.
+    upd.quiet = true;
+    upd.waiting.postMessage("SKIP_WAITING");
+    upd.waiting = null;
+  }
+  renderUpdate();
+  if (!liveIsNewer() && !upd.waiting) return;
+  const tag = liveIsNewer() ? upd.latest.version : "waiting";
+  if (upd.told === tag) return;
+  upd.told = tag;
+  toast(liveIsNewer() ? "ASPECTS " + upd.latest.version + " is available" : "An update is downloaded and ready", "info", "✨",
+        { label: "Update now", run: applyUpdate });
+}
+
+function applyUpdate() {
+  if (!saveBlocked) save();   // every change is saved already; this is belt and braces
+  try { sessionStorage.setItem(UPDATING_TO, liveIsNewer() ? upd.latest.version : APP_VERSION); } catch (_) {}
+  toast("Updating…", "info", "⏳");
+  if (upd.waiting) {
+    upd.quiet = false;
+    upd.waiting.postMessage("SKIP_WAITING");   // controllerchange then reloads
+    setTimeout(reloadFresh, 4000);             // in case the worker never takes over
+  } else {
+    reloadFresh();
+  }
+}
+
+/* A never-seen URL can't be answered from any cache, so this fetches the live
+   page; the service worker stores it as the new offline copy on the way through. */
+function reloadFresh() {
+  location.replace(location.pathname + "?updated=" + Date.now());
+}
+
+/* After an update reload: say whether it worked, honestly. */
+function confirmUpdate() {
+  let target = null;
+  try { target = sessionStorage.getItem(UPDATING_TO); sessionStorage.removeItem(UPDATING_TO); } catch (_) {}
+  if (target === null) return;
+  if (!newerThan(target, APP_VERSION)) {
+    setTimeout(() => toast("Running version " + APP_VERSION + " — all " + S.tx.length + " transactions are here", "good", "✨"), 900);
+  } else {
+    setTimeout(() => toast("Version " + target + " isn't being served yet — GitHub can take a few minutes to publish. Try again shortly.", "info", "⏳"), 900);
+  }
+}
+
+function renderUpdate() {
+  const ver = $("#appVersion");
+  if (!ver) return;
+  ver.textContent = APP_VERSION;
+  const status = $("#updateStatus"), check = $("#checkUpdateBtn");
+  check.disabled = upd.checking;
+  check.textContent = upd.checking ? "Checking…" : "Check for updates";
+  $("#updateNowBtn").hidden = !(liveIsNewer() || upd.waiting);
+
+  if (upd.checking) status.textContent = "Checking…";
+  else if (liveIsNewer()) status.textContent = "Version " + upd.latest.version + " is available";
+  else if (upd.waiting) status.textContent = "An update is downloaded and ready";
+  else if (upd.error) status.textContent = upd.error;
+  else if (upd.checkedAt) status.textContent = "Up to date · checked " +
+    new Date(upd.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  else status.textContent = "";
+
+  $("#updateNotes").textContent = liveIsNewer() && upd.latest.notes ? "What's new: " + upd.latest.notes : "";
 }
 
 function initPWA() {
   const syncOnline = () => { const c = $("#offlineChip"); if (c) c.hidden = navigator.onLine; };
-  window.addEventListener("online",  () => { syncOnline(); toast("Back online", "good", "📶"); });
+  window.addEventListener("online",  () => { syncOnline(); toast("Back online", "good", "📶"); checkForUpdates(false); });
   window.addEventListener("offline", () => { syncOnline(); toast("Offline — everything still works", "info", "⚡"); });
   syncOnline();
 
@@ -2672,11 +3111,13 @@ function initPWA() {
   });
 
   renderInstall();
+  setTimeout(() => checkForUpdates(false), 2500);
 
   if (!("serviceWorker" in navigator)) return;
 
   navigator.serviceWorker.register("sw.js").then(reg => {
-    if (reg.waiting && navigator.serviceWorker.controller) promptUpdate(reg.waiting);
+    upd.reg = reg;
+    if (reg.waiting && navigator.serviceWorker.controller) { upd.waiting = reg.waiting; settleUpdate(); }
 
     reg.addEventListener("updatefound", () => {
       const incoming = reg.installing;
@@ -2684,7 +3125,7 @@ function initPWA() {
       incoming.addEventListener("statechange", () => {
         // Reaching "installed" while a worker already controls the page means
         // this is an update rather than the very first install.
-        if (incoming.state === "installed" && navigator.serviceWorker.controller) promptUpdate(incoming);
+        if (incoming.state === "installed" && navigator.serviceWorker.controller) { upd.waiting = incoming; settleUpdate(); }
       });
     });
   }).catch(err => console.warn("Service worker registration failed:", err));
@@ -2695,15 +3136,18 @@ function initPWA() {
   let reloading = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (!hadController || reloading) return;
+    if (upd.quiet) { upd.quiet = false; return; }   // page was already current
     reloading = true;
-    location.reload();
+    reloadFresh();
   });
 }
 
 /* Home-screen shortcuts navigate to ./?go=expense and friends. */
 function handleLaunchShortcut() {
-  let go = null;
-  try { go = new URLSearchParams(location.search).get("go"); } catch (_) { return; }
+  let params = null;
+  try { params = new URLSearchParams(location.search); } catch (_) { return; }
+  if (params.has("updated")) history.replaceState(null, "", location.pathname);   // left by reloadFresh()
+  const go = params.get("go");
   if (!go) return;
 
   history.replaceState(null, "", location.pathname);   // don't re-fire on reload
@@ -2719,6 +3163,7 @@ function handleLaunchShortcut() {
    ============================================================ */
 function boot() {
   S = load();
+  if (legacyImported && save()) clearLegacyKeys();
   applyTheme(S.theme || "dark");
   applyRecurring();
 
@@ -2744,6 +3189,9 @@ function boot() {
 
   initPWA();
   handleLaunchShortcut();
+  reportStorageIssue();
+  confirmUpdate();
+  checkPersistence(false);
 
   if (!S.tx.length && !S.tasks.length && !S.goals.length) {
     setTimeout(() => toast("Welcome to ASPECTS — press Ctrl K to explore", "info", "👋"), 800);

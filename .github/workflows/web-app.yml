@@ -1,0 +1,34 @@
+name: Check ASPECTS web app
+
+on:
+  push:
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'version.json'
+      - 'manifest.webmanifest'
+      - 'scripts/check-web-app.mjs'
+      - '.github/workflows/web-app.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'version.json'
+      - 'manifest.webmanifest'
+      - 'scripts/check-web-app.mjs'
+      - '.github/workflows/web-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Versions match, scripts parse, JSON is valid
+        run: node scripts/check-web-app.mjs
