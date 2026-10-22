@@ -11,7 +11,8 @@
     <string name="gauge_net">NET</string>
 
     <string name="adaptive_mode">Adaptive Drive Mode</string>
-    <string name="adaptive_hint">Let the clock pick: Night Drive through the day, Sunset Run at dusk, Wet Neon after dark.</string>
+    <string name="adaptive_hint">Let the clock and the sky pick: Golden Hour at sunrise, Night Drive through the day, Sunset Run at dusk, Wet Neon after dark. With weather set, rain brings Wet Neon and snow brings the Aurora.</string>
+    <string name="adaptive_switched_off">Adaptive Drive Mode is off, so the mode you picked stays.</string>
     <string name="adaptive_value">Adaptive</string>
     <string name="adaptive_active">The clock is choosing. Switch Adaptive off to pick one yourself.</string>
 
@@ -84,6 +85,40 @@
     <string name="hidden_restored">All apps restored to the home screen</string>
     <string name="set_default_home">Set ASPECTS TV as the home screen</string>
     <string name="minutes">%1$d min</string>
+
+    <string name="weather">Weather</string>
+    <string name="weather_hint">Temperature and sky under the clock. Type the name of your town once; only its map position is sent to Open-Meteo after that.</string>
+    <string name="weather_prompt">Where is this TV?</string>
+    <string name="weather_prompt_hint">Town or city, e.g. Johannesburg</string>
+    <string name="weather_find">Find</string>
+    <string name="weather_turn_off">Turn weather off</string>
+    <string name="weather_searching">Looking it up\u2026</string>
+    <string name="weather_not_found">Couldn\'t find that place, or the TV is offline. Try a nearby city.</string>
+    <string name="weather_set">Weather set for %1$s</string>
+    <string name="weather_line">%1$d\u00B0  %2$s  \u00B7  %3$s</string>
+    <string name="weather_clear">CLEAR</string>
+    <string name="weather_cloud">CLOUDY</string>
+    <string name="weather_fog">FOG</string>
+    <string name="weather_rain">RAIN</string>
+    <string name="weather_snow">SNOW</string>
+    <string name="weather_storm">STORM</string>
+
+    <string name="gear_rail">Gear selector</string>
+    <string name="gear_rail_hint">A P-R-N-D style strip down the left edge, one letter per row, lit on the row you are in.</string>
+    <string name="edge_light">Edge light</string>
+    <string name="edge_light_hint">A light that laps the border of the selected app, in that app\'s own colour.</string>
+    <string name="ambient_glow">Ambient glow</string>
+    <string name="ambient_glow_hint">The edges of the screen glow in the selected app\'s colour, like light spilling onto the wall.</string>
+    <string name="reflection">Wet-road reflection</string>
+    <string name="reflection_hint">The selected app mirrored on the road surface. Wet Neon only.</string>
+    <string name="living_background">Living background</string>
+    <string name="living_background_hint">Rain falls, the road moves, the aurora drifts. Redraws the screen 24 times a second, so the TV runs a little warmer.</string>
+    <string name="dash_font">Dashboard font</string>
+    <string name="dash_font_hint">Orbitron for the clock, Rajdhani for the labels.</string>
+    <string name="rolling_clock">Rolling clock digits</string>
+    <string name="rolling_clock_hint">Digits roll over like an odometer when the minute changes.</string>
+    <string name="drifting_clock">Drifting clock</string>
+    <string name="drifting_clock_hint">When faded to wallpaper, the clock creeps slowly around the screen so it never leaves a ghost on the panel.</string>
 
     <string name="state_on">ON</string>
     <string name="state_off">OFF</string>

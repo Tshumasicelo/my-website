@@ -18,7 +18,33 @@ fast cold start over visual gimmicks.
 | 📺 **TV Apps** | Every proper leanback app (Netflix, YouTube, Daily Play…) with its real 16:9 banner |
 | 📱 **All Apps** | **Sideloaded phone apps that the stock Android TV launcher refuses to show** |
 | ⚙️ **System** | One-press tiles into Settings, Wi-Fi, Display, Apps, Storage, Date & time and Developer options |
-| 🎨 **Themes** | Six accent colours; the whole UI repaints instantly |
+| 🏎️ **Drive Modes** | Seven painted backgrounds: Night Drive, Wet Neon, Sunset Run, Aurora Highway, Track Day, Tokyo Kaido, Golden Hour |
+| 🌦️ **Weather** | Temperature and sky under the clock; rain can switch the screen to Wet Neon |
+
+## v3 — the Showroom release
+
+| | |
+|---|---|
+| 🎚️ **Gear selector** | A P-R-N-D strip down the left edge, one letter per row; a lit marker slides to the row you are in |
+| 🌈 **Edge light** | A comet of light laps the border of the focused app, in that app's own colour |
+| 🖼️ **Ambient glow** | The screen edges glow in the focused app's colour, Ambilight-style |
+| 🪞 **Wet-road reflection** | In Wet Neon, the focused app is mirrored on the road surface |
+| 🌌 **Four new Drive Modes** | Aurora Highway, Track Day, Tokyo Kaido and Golden Hour, all painted in code |
+| 🔤 **Dashboard font** | Orbitron for the clock, Rajdhani for labels |
+| 🔢 **Odometer clock** | Digits roll over like a mechanical odometer when the minute changes |
+| 🌧️ **Weather** | Open-Meteo, no account or key. With Adaptive Drive Mode on, rain brings Wet Neon and snow brings the Aurora |
+| 🌊 **Living background** | Rain falls, the road moves, the aurora drifts. *Off by default* |
+| 🛡️ **Drifting clock** | When faded to wallpaper, the clock creeps around the screen so it never burns in |
+
+Every one of these can be switched off in **System → Theme**. Adaptive Drive Mode
+now also has a sunrise slot: Golden Hour from 06:00 to 08:59.
+
+### Setting up weather
+
+**System → Theme → Weather**, type your town (for example *Johannesburg*) and press
+**Find**. The name is looked up once; after that only its map position is sent
+to [Open-Meteo](https://open-meteo.com), every 30 minutes. The launcher never
+uses the TV's IP address or location to guess where you are.
 
 ## Controls
 
@@ -116,6 +142,25 @@ Keep `signing.jks` off the repo — this one is public.
   cooled SoC idle.
 - **`itemAnimator` is disabled** and rows use fixed-size cards, so scrolling
   never triggers a re-layout pass.
+
+### What the v3 effects cost
+
+- **Drive Modes cache their gradients.** Each scene builds its shaders once per
+  mode and screen size; anything that moves does so through a reused matrix or
+  a canvas translation, so a living background allocates nothing per frame.
+- **The living background is the one real cost**, which is why it ships off:
+  it redraws the screen about 24 times a second. Everything else is still
+  until you press a key.
+- **The edge light runs at 30 fps, not 60**, and stops whenever the launcher is
+  behind an app or faded out.
+- **The reflection is a ~50 KB snapshot**, taken once per focus at half
+  resolution with the fade baked in, then drawn by a `RecyclerView` item
+  decoration so it follows the card as the row scrolls.
+- **The drifting clock moves one density-pixel every half second.** That is
+  two frames a second on a screen that is otherwise idle.
+- **The fonts are subset to Latin**, 92 KB for all three files. Both are under
+  the SIL Open Font License; the licence texts ship beside them in
+  `app/src/main/assets/fonts/`.
 
 ### The Android 11 gotcha this app had to solve
 

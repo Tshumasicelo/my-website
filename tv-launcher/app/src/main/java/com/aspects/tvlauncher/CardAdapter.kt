@@ -129,6 +129,7 @@ class CardAdapter(
                 onFocus(item, v)
             } else {
                 gloss?.visibility = View.INVISIBLE
+                EdgeLight.detach(v)
             }
         }
     }
@@ -162,9 +163,9 @@ class CardAdapter(
         val label: TextView = view.findViewById(R.id.label)
     }
 
-    private companion object {
-        const val TYPE_WIDE = 0
-        const val TYPE_TILE = 1
+    companion object {
+        private const val TYPE_WIDE = 0
+        private const val TYPE_TILE = 1
         const val FOCUS_SCALE = 1.09f
     }
 }

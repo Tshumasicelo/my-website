@@ -38,16 +38,25 @@ class Prefs(context: Context) {
         set(value) = sp.edit().putBoolean(KEY_ADAPTIVE, value).apply()
 
     /**
-     * Which Drive Mode is actually in force. Night Drive holds the brightest
-     * hours because its black ground survives window glare; Sunset Run takes
-     * golden hour; Wet Neon owns the dark.
+     * Which Drive Mode is actually in force. Golden Hour takes the sunrise;
+     * Night Drive holds the brightest hours because its black ground survives
+     * window glare; Sunset Run takes the evening; Wet Neon owns the dark.
+     *
+     * The weather outranks the clock: if it is raining outside, the screen is
+     * wet too, and snow brings the Aurora out whatever the hour.
      */
-    fun effectiveModeIndex(hourOfDay: Int): Int {
+    fun effectiveModeIndex(hourOfDay: Int, weather: Weather.Now? = null): Int {
         if (!adaptiveMode) return driveMode
+        when (weather?.kind) {
+            Weather.Kind.RAIN, Weather.Kind.STORM -> return DriveMode.WET.ordinal
+            Weather.Kind.SNOW -> return DriveMode.AURORA.ordinal
+            else -> {}
+        }
         return when (hourOfDay) {
-            in 6..15 -> 0
-            in 16..18 -> 2
-            else -> 1
+            in 6..8 -> DriveMode.GOLDEN.ordinal
+            in 9..15 -> DriveMode.NIGHT.ordinal
+            in 16..18 -> DriveMode.SUNSET.ordinal
+            else -> DriveMode.WET.ordinal
         }
     }
 
@@ -151,6 +160,104 @@ class Prefs(context: Context) {
         get() = sp.getInt(KEY_PARKED, 0)
         set(value) = sp.edit().putInt(KEY_PARKED, value).apply()
 
+    // ------------------------------------------------------------- showroom
+
+    /** The P-R-N-D strip down the left edge that shows which row you are in. */
+    var gearRail: Boolean
+        get() = sp.getBoolean(KEY_GEAR_RAIL, true)
+        set(value) = sp.edit().putBoolean(KEY_GEAR_RAIL, value).apply()
+
+    /** A light that laps the border of whichever card has focus. */
+    var edgeLight: Boolean
+        get() = sp.getBoolean(KEY_EDGE_LIGHT, true)
+        set(value) = sp.edit().putBoolean(KEY_EDGE_LIGHT, value).apply()
+
+    /** The focused card mirrored on the road surface. Wet Neon only. */
+    var reflection: Boolean
+        get() = sp.getBoolean(KEY_REFLECTION, true)
+        set(value) = sp.edit().putBoolean(KEY_REFLECTION, value).apply()
+
+    /** The screen edges glow in the focused app's colour. */
+    var ambientGlow: Boolean
+        get() = sp.getBoolean(KEY_AMBIENT, true)
+        set(value) = sp.edit().putBoolean(KEY_AMBIENT, value).apply()
+
+    var dashFont: Boolean
+        get() = sp.getBoolean(KEY_DASH_FONT, true)
+        set(value) = sp.edit().putBoolean(KEY_DASH_FONT, value).apply()
+
+    /** Clock digits roll over like an odometer instead of cutting. */
+    var rollingClock: Boolean
+        get() = sp.getBoolean(KEY_ROLLING_CLOCK, true)
+        set(value) = sp.edit().putBoolean(KEY_ROLLING_CLOCK, value).apply()
+
+    /**
+     * Off by default: motion means redrawing the screen many times a second,
+     * which this passively cooled box feels. Everything else here is still.
+     */
+    var livingBackground: Boolean
+        get() = sp.getBoolean(KEY_LIVING, false)
+        set(value) = sp.edit().putBoolean(KEY_LIVING, value).apply()
+
+    /** The faded-to-wallpaper clock creeps around so it never burns in. */
+    var driftingClock: Boolean
+        get() = sp.getBoolean(KEY_DRIFT, true)
+        set(value) = sp.edit().putBoolean(KEY_DRIFT, value).apply()
+
+    // ---------------------------------------------------------------- weather
+
+    /** The place weather is fetched for, or null when weather is switched off. */
+    var weatherPlace: Weather.Place?
+        get() {
+            val name = sp.getString(KEY_WEATHER_NAME, null) ?: return null
+            if (!sp.contains(KEY_WEATHER_LAT)) return null
+            return Weather.Place(
+                name,
+                sp.getFloat(KEY_WEATHER_LAT, 0f).toDouble(),
+                sp.getFloat(KEY_WEATHER_LON, 0f).toDouble()
+            )
+        }
+        set(value) {
+            val editor = sp.edit()
+                .remove(KEY_WEATHER_CODE).remove(KEY_WEATHER_TEMP)
+                .remove(KEY_WEATHER_DAY).remove(KEY_WEATHER_AT)
+            if (value == null) {
+                editor.remove(KEY_WEATHER_NAME).remove(KEY_WEATHER_LAT).remove(KEY_WEATHER_LON)
+            } else {
+                editor.putString(KEY_WEATHER_NAME, value.name)
+                    .putFloat(KEY_WEATHER_LAT, value.latitude.toFloat())
+                    .putFloat(KEY_WEATHER_LON, value.longitude.toFloat())
+            }
+            editor.apply()
+        }
+
+    /**
+     * The last reading, kept so the chip is right the instant the launcher
+     * starts instead of blank until the network answers.
+     */
+    var lastWeather: Weather.Now?
+        get() {
+            if (!sp.contains(KEY_WEATHER_AT)) return null
+            return Weather.Now(
+                sp.getInt(KEY_WEATHER_CODE, 0),
+                sp.getFloat(KEY_WEATHER_TEMP, 0f).toDouble(),
+                sp.getBoolean(KEY_WEATHER_DAY, true),
+                sp.getLong(KEY_WEATHER_AT, 0L)
+            )
+        }
+        set(value) {
+            if (value == null) {
+                sp.edit().remove(KEY_WEATHER_AT).apply()
+                return
+            }
+            sp.edit()
+                .putInt(KEY_WEATHER_CODE, value.code)
+                .putFloat(KEY_WEATHER_TEMP, value.temperatureC.toFloat())
+                .putBoolean(KEY_WEATHER_DAY, value.isDay)
+                .putLong(KEY_WEATHER_AT, value.fetchedAt)
+                .apply()
+        }
+
     var homePromptDismissed: Boolean
         get() = sp.getBoolean(KEY_HOME_PROMPT, false)
         set(value) = sp.edit().putBoolean(KEY_HOME_PROMPT, value).apply()
@@ -226,5 +333,20 @@ class Prefs(context: Context) {
         const val KEY_HOME_PROMPT = "home_prompt_dismissed"
         const val KEY_FAVOURITES = "favourites_ordered"
         const val KEY_HIDDEN = "hidden_apps"
+        const val KEY_GEAR_RAIL = "gear_rail"
+        const val KEY_EDGE_LIGHT = "edge_light"
+        const val KEY_REFLECTION = "reflection"
+        const val KEY_AMBIENT = "ambient_glow"
+        const val KEY_DASH_FONT = "dash_font"
+        const val KEY_ROLLING_CLOCK = "rolling_clock"
+        const val KEY_LIVING = "living_background"
+        const val KEY_DRIFT = "drifting_clock"
+        const val KEY_WEATHER_NAME = "weather_name"
+        const val KEY_WEATHER_LAT = "weather_lat"
+        const val KEY_WEATHER_LON = "weather_lon"
+        const val KEY_WEATHER_CODE = "weather_code"
+        const val KEY_WEATHER_TEMP = "weather_temp"
+        const val KEY_WEATHER_DAY = "weather_day"
+        const val KEY_WEATHER_AT = "weather_at"
     }
 }
