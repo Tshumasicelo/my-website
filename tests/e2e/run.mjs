@@ -60,8 +60,24 @@ function deploy(kind) {
 
 /* ---------- helpers ---------- */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-async function launch() {
-  const ctx = await playwright[BROWSER].launchPersistentContext(profile, { headless: true, acceptDownloads: true });
+/* A persistent profile is the truest "close and reopen the browser". Where a
+   browser can't start one (Playwright's WebKit on some macOS runners), fall back
+   to a fresh context that carries the site's storage across — localStorage is
+   where ASPECTS keeps its data, so that is what a restart must preserve. */
+let mode = process.env.FORCE_EPHEMERAL === "1" ? "ephemeral" : "persistent", browser = null;
+async function launch(carry) {
+  let ctx = null;
+  if (mode === "persistent") {
+    try { ctx = await playwright[BROWSER].launchPersistentContext(profile, { headless: true, acceptDownloads: true }); }
+    catch (err) {
+      console.log("note: persistent profile unavailable (" + err.message.split("\n")[0] + "); carrying storage between contexts instead");
+      mode = "ephemeral";
+    }
+  }
+  if (!ctx) {
+    browser = browser || await playwright[BROWSER].launch({ headless: true });
+    ctx = await browser.newContext({ acceptDownloads: true, storageState: carry });
+  }
   if (BLOCK_CDN) await ctx.route(/^https:\/\/(cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)\//, r => r.abort());
   return ctx;
 }
@@ -165,12 +181,13 @@ check("history: search works across all time", (await page.textContent("#txCount
 await page.fill("#txSearch", "");
 
 /* ---- 4. Full browser restart ---- */
+const carry = mode === "ephemeral" ? await ctx.storageState() : undefined;
 await ctx.close();
-ctx = await launch();
+ctx = await launch(carry);
 page = await ctx.newPage();
 page.on("pageerror", e => errors.push(e.message));
 await goto(page);
-check("restart: all rows still there after closing the browser", (await state(page)).tx.length === 4);
+check("restart: all rows still there after closing the browser", (await state(page)).tx.length === 4, mode + " profile");
 
 /* ---- 5. Undo delete ---- */
 await page.click('.tab[data-view="money"]');
@@ -338,6 +355,7 @@ check("erase: safety copies removed", await page.evaluate(() => !Object.keys(loc
 
 check("no uncaught page errors", errors.length === 0, errors.join(" / "));
 await ctx.close();
+if (browser) await browser.close();
 server.kill();
 fs.rmSync(work, { recursive: true, force: true });
 
