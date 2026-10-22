@@ -1,0 +1,5 @@
+{
+  "version": "1.1.0",
+  "released": "2026-10-22",
+  "notes": "Safer saving that never overwrites data it can't read, an All time view of your history, CSV export, merge-or-replace imports, undo for deleted transactions, and Check for updates in Settings."
+}

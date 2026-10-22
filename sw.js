@@ -1,11 +1,16 @@
 /* ============================================================
    ASPECTS service worker
    Bump CACHE_VERSION on every deploy — it is what tells an
-   already-installed copy that a new build exists.
+   already-installed copy that a new build exists. It must match
+   APP_VERSION in index.html and "version" in version.json
+   (scripts/check-web-app.mjs enforces this).
+
+   This worker only ever touches Cache Storage. User data lives in
+   localStorage, which installing or activating a worker never clears.
    ============================================================ */
 "use strict";
 
-const CACHE_VERSION = "v1.0.0";
+const CACHE_VERSION = "v1.1.0";
 const CORE_CACHE    = "aspects-core-" + CACHE_VERSION;
 const RUNTIME_CACHE = "aspects-runtime-" + CACHE_VERSION;
 
@@ -45,7 +50,9 @@ const EXTERNAL = [
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CORE_CACHE);
-    await cache.addAll(CORE);
+    // cache: "reload" skips the browser's HTTP cache. GitHub Pages serves files
+    // with max-age=600, so without it a fresh worker could precache the old page.
+    await cache.addAll(CORE.map(url => new Request(url, { cache: "reload" })));
     await Promise.allSettled(EXTERNAL.map(async url => {
       const res = await fetchWithTimeout(new Request(url, { mode: "cors" }));
       if (res && res.ok) await cache.put(url, res);
@@ -78,6 +85,9 @@ self.addEventListener("fetch", event => {
   const url = new URL(req.url);
   if (url.protocol !== "http:" && url.protocol !== "https:") return;
 
+  /* The update check must always see what is live, never a cached answer. */
+  if (url.origin === self.location.origin && url.pathname.endsWith("/version.json")) return;
+
   /* Navigation: network-first, so a fresh deploy is picked up immediately;
      fall back to the cached shell when offline. ignoreSearch matters because
      the manifest shortcuts navigate to ./?go=expense and friends. */
@@ -86,8 +96,12 @@ self.addEventListener("fetch", event => {
       try {
         const preload = await event.preloadResponse;
         const fresh = preload || await fetchWithTimeout(req);
-        const cache = await caches.open(CORE_CACHE);
-        cache.put("./index.html", fresh.clone());
+        // Only a real page may replace the offline copy — never a 404 or 5xx
+        // served while GitHub Pages is mid-deploy.
+        if (fresh.ok) {
+          const cache = await caches.open(CORE_CACHE);
+          cache.put("./index.html", fresh.clone());
+        }
         return fresh;
       } catch (_) {
         const cached = await caches.match("./index.html", { ignoreSearch: true });

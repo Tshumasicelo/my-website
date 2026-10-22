@@ -1,0 +1,72 @@
+name: Check ASPECTS web app
+
+on:
+  push:
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'version.json'
+      - 'manifest.webmanifest'
+      - 'scripts/check-web-app.mjs'
+      - 'tests/e2e/**'
+      - '.github/workflows/web-app.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'version.json'
+      - 'manifest.webmanifest'
+      - 'scripts/check-web-app.mjs'
+      - 'tests/e2e/**'
+      - '.github/workflows/web-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Versions match, scripts parse, JSON is valid
+        run: node scripts/check-web-app.mjs
+
+  # The same browser tests on Safari's engine (WebKit, on macOS) and Chromium.
+  # jsDelivr is reachable here, so this also proves the Chart.js SRI hash.
+  e2e:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            browser: webkit
+          - os: ubuntu-latest
+            browser: chromium
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: tests/e2e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the tests upgrade from an older build, read with git show
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Browser tests (${{ matrix.browser }})
+        run: node run.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ matrix.browser }}
+          path: tests/e2e/output/
+          if-no-files-found: ignore
