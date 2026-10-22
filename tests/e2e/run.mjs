@@ -108,7 +108,8 @@ const sept = ymShift(-1), aug = ymShift(-2), lastYear = new Date(now.getFullYear
 /* ======================================================================== */
 console.log("browser:", BROWSER, "· baseline:", BASELINE, "· cdn:", BLOCK_CDN ? "blocked" : "live");
 deploy("old");
-const server = spawn(process.execPath, [path.join(here, "server.mjs"), site, String(PORT)], { stdio: "ignore" });
+const startServer = () => spawn(process.execPath, [path.join(here, "server.mjs"), site, String(PORT)], { stdio: "ignore" });
+let server = startServer();
 await sleep(800);
 let ctx = await launch();
 let page = await ctx.newPage();
@@ -289,14 +290,18 @@ check("next deploy: confirms data intact", /Running version 1\.1\.1 — all \d+ 
 check("next deploy: no data lost", (await state(page)).tx.length === rowsBefore);
 
 /* ---- 11. Offline ---- */
-await ctx.setOffline(true);
+// The site becomes unreachable, as on a phone with no signal. (Not setOffline():
+// Playwright's WebKit then fails every navigation before the service worker can answer.)
+server.kill();
+await sleep(500);
 await goto(page);
 check("offline: app opens from the offline copy", (await appVersion(page)) === "1.1.1");
 check("offline: data present", (await state(page)).tx.length === rowsBefore);
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
-check("offline: check explains it is offline", /offline/i.test(await waitToast(page, /offline/i)));
-await ctx.setOffline(false);
+check("offline: update check fails gracefully", /offline|Couldn't reach/i.test(await waitToast(page, /offline|Couldn't reach/i)));
+server = startServer();
+await sleep(800);
 deploy("new");   // back to the 1.1.0 build for the remaining tests
 
 /* ---- 12. Unreadable data is never overwritten ---- */
