@@ -56,12 +56,15 @@ object ThemeKit {
         ctx: Context,
         mode: DriveMode,
         radiusDp: Float = 14f,
-        glowOverride: Int = 0
+        glowOverride: Int = 0,
+        ringAlpha: Float = 1f
     ): StateListDrawable {
         val glow = if (glowOverride == 0) mode.glow else glowOverride
         val r = dp(ctx, radiusDp).toFloat()
+        // ringAlpha < 1 when an EdgeLight runs on top: a full-strength ring
+        // underneath would drown the comet travelling along it
         val focused = rounded(
-            withAlpha(glow, 0.14f), glow, dp(ctx, 3f), r
+            withAlpha(glow, 0.14f), withAlpha(glow, ringAlpha), dp(ctx, 3f), r
         )
         val idle = rounded(GLASS, HAIRLINE, dp(ctx, 1f), r)
         return StateListDrawable().apply {

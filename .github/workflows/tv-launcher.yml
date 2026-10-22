@@ -10,6 +10,13 @@ on:
 permissions:
   contents: write
 
+# Every run deletes and recreates the same tv-latest release, so two runs at
+# once race: one removes the tag while the other is publishing against it
+# ("Published releases must have a valid tag"). Queue them instead.
+concurrency:
+  group: tv-latest
+  cancel-in-progress: false
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -96,8 +103,9 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk out/aspects-tv.apk
           # The launcher reads this to decide whether an update is available,
           # instead of scraping an APK or hitting a rate-limited API.
-          printf '{"versionCode": %s, "versionName": "2.0.%s"}\n' \
-            "$((200 + ASPECTS_BUILD_NUMBER))" "$ASPECTS_BUILD_NUMBER" > out/version.json
+          # Must match versionCode/versionName in app/build.gradle.kts.
+          printf '{"versionCode": %s, "versionName": "3.0.%s"}\n' \
+            "$((300 + ASPECTS_BUILD_NUMBER))" "$ASPECTS_BUILD_NUMBER" > out/version.json
           cat out/version.json
           ls -lh out/
 

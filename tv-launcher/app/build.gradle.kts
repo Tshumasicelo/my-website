@@ -24,8 +24,10 @@ android {
         // APK installable on essentially any Android TV box you might add later.
         minSdk = 21
         targetSdk = 34
-        versionCode = 200 + buildNumber
-        versionName = "2.0.$buildNumber"
+        // 3.0: the Showroom release. The base moves up a hundred so a v3 build
+        // always installs over any v2 one, whatever their run numbers.
+        versionCode = 300 + buildNumber
+        versionName = "3.0.$buildNumber"
     }
 
     // Release signing is driven by env vars so no private key ever lands in this

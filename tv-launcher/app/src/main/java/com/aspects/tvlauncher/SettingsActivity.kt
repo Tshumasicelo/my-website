@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -35,7 +36,9 @@ class SettingsActivity : Activity() {
         setContentView(R.layout.activity_settings)
 
         findViewById<DriveBackgroundView>(R.id.background).mode = mode
-        findViewById<TextView>(R.id.heading).setTextColor(mode.ink)
+        val heading = findViewById<TextView>(R.id.heading)
+        heading.setTextColor(mode.ink)
+        heading.typeface = Fonts.labelBold(this, prefs.dashFont)
 
         val about = findViewById<TextView>(R.id.about)
         about.setTextColor(mode.dim)
@@ -72,16 +75,16 @@ class SettingsActivity : Activity() {
             if (guardEnabled) offerTakeoverOptions() else openAccessibility()
         }
 
-        // Cycling on OK beats a nested swatch strip: one button, no second focus
-        // axis to get lost in with a D-pad.
+        // A list rather than cycling on OK: with seven modes, cycling meant up to
+        // six presses to reach the one before. A list is still a single focus
+        // axis, so there is nothing extra to get lost in with a D-pad.
         addRow(
             R.drawable.ic_star,
             getString(R.string.drive_mode),
             if (prefs.adaptiveMode) getString(R.string.adaptive_value) else mode.label,
             if (prefs.adaptiveMode) getString(R.string.adaptive_active) else mode.blurb
         ) {
-            prefs.driveMode = DriveMode.next(prefs.driveMode)
-            recreate()
+            pickDriveMode()
         }
 
         addToggle(
@@ -89,6 +92,60 @@ class SettingsActivity : Activity() {
             getString(R.string.adaptive_hint), prefs.adaptiveMode
         ) {
             prefs.adaptiveMode = it
+        }
+
+        val place = prefs.weatherPlace
+        addRow(
+            R.drawable.ic_weather_sun,
+            getString(R.string.weather),
+            place?.name?.substringBefore(',') ?: getString(R.string.state_off),
+            getString(R.string.weather_hint),
+            place != null
+        ) {
+            askForPlace()
+        }
+
+        addToggle(
+            R.drawable.ic_tune, getString(R.string.gear_rail),
+            getString(R.string.gear_rail_hint), prefs.gearRail
+        ) {
+            prefs.gearRail = it
+        }
+        addToggle(
+            R.drawable.ic_star, getString(R.string.edge_light),
+            getString(R.string.edge_light_hint), prefs.edgeLight
+        ) {
+            prefs.edgeLight = it
+        }
+        addToggle(
+            R.drawable.ic_display, getString(R.string.ambient_glow),
+            getString(R.string.ambient_glow_hint), prefs.ambientGlow
+        ) {
+            prefs.ambientGlow = it
+        }
+        addToggle(
+            R.drawable.ic_weather_rain, getString(R.string.reflection),
+            getString(R.string.reflection_hint), prefs.reflection
+        ) {
+            prefs.reflection = it
+        }
+        addToggle(
+            R.drawable.ic_signal, getString(R.string.living_background),
+            getString(R.string.living_background_hint), prefs.livingBackground
+        ) {
+            prefs.livingBackground = it
+        }
+        addToggle(
+            R.drawable.ic_clock, getString(R.string.dash_font),
+            getString(R.string.dash_font_hint), prefs.dashFont
+        ) {
+            prefs.dashFont = it
+        }
+        addToggle(
+            R.drawable.ic_clock, getString(R.string.rolling_clock),
+            getString(R.string.rolling_clock_hint), prefs.rollingClock
+        ) {
+            prefs.rollingClock = it
         }
 
         addRow(
@@ -166,6 +223,12 @@ class SettingsActivity : Activity() {
             R.drawable.ic_display, getString(R.string.parked_mode),
             getString(R.string.parked_hint), PARKED_STEPS
         ) { prefs.parkedMinutes }
+        addToggle(
+            R.drawable.ic_display, getString(R.string.drifting_clock),
+            getString(R.string.drifting_clock_hint), prefs.driftingClock
+        ) {
+            prefs.driftingClock = it
+        }
 
         val hiddenCount = prefs.hidden.size
         addRow(
@@ -304,6 +367,83 @@ class SettingsActivity : Activity() {
     private fun minutesLabel(minutes: Int): String =
         if (minutes <= 0) getString(R.string.state_off)
         else getString(R.string.minutes, minutes)
+
+    private fun pickDriveMode() {
+        val modes = DriveMode.values()
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(R.string.drive_mode)
+            .setSingleChoiceItems(
+                modes.map { it.label + "  \u2014  " + it.blurb }.toTypedArray(),
+                prefs.driveMode.coerceIn(0, modes.size - 1)
+            ) { dialog, which ->
+                dialog.dismiss()
+                if (which == prefs.driveMode) return@setSingleChoiceItems
+                prefs.driveMode = which
+                // Picking a mode by hand is a clear sign you want that one, not
+                // whatever the clock or the sky would choose.
+                if (prefs.adaptiveMode) {
+                    prefs.adaptiveMode = false
+                    Toast.makeText(this, R.string.adaptive_switched_off, Toast.LENGTH_LONG).show()
+                }
+                recreate()
+            }
+            .show()
+    }
+
+    /**
+     * Weather wants a place, and the only honest way to get one is to ask. The
+     * name is looked up once, here; from then on only the coordinates are sent.
+     */
+    private fun askForPlace() {
+        val field = EditText(this).apply {
+            setSingleLine()
+            hint = getString(R.string.weather_prompt_hint)
+            setText(prefs.weatherPlace?.name?.substringBefore(',') ?: "")
+            setSelection(text.length)
+        }
+        val gutter = ThemeKit.dp(this, 22f)
+        val frame = LinearLayout(this).apply {
+            setPadding(gutter, gutter / 2, gutter, 0)
+            addView(
+                field,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+        val builder = AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle(R.string.weather_prompt)
+            .setView(frame)
+            .setPositiveButton(R.string.weather_find) { _, _ -> lookUp(field.text.toString()) }
+            .setNegativeButton(android.R.string.cancel, null)
+        if (prefs.weatherPlace != null) {
+            builder.setNeutralButton(R.string.weather_turn_off) { _, _ ->
+                prefs.weatherPlace = null
+                build()
+            }
+        }
+        builder.show()
+    }
+
+    private fun lookUp(query: String) {
+        if (query.isBlank()) return
+        Toast.makeText(this, R.string.weather_searching, Toast.LENGTH_SHORT).show()
+        Thread {
+            val place = Weather.find(query)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (place == null) {
+                    Toast.makeText(this, R.string.weather_not_found, Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                prefs.weatherPlace = place
+                Toast.makeText(this, getString(R.string.weather_set, place.name), Toast.LENGTH_SHORT)
+                    .show()
+                build()
+            }
+        }.start()
+    }
 
     /** Opens the system home-app picker; we can only ever ask, never switch. */
     /**

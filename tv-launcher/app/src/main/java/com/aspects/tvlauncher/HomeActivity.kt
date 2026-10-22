@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
@@ -32,6 +33,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.roundToInt
 
 class HomeActivity : Activity() {
 
@@ -52,7 +54,7 @@ class HomeActivity : Activity() {
     private lateinit var scrim: View
     private lateinit var scroller: ScrollView
     private lateinit var content: LinearLayout
-    private lateinit var clockView: TextView
+    private lateinit var clockView: OdometerClockView
     private lateinit var clockGauge: ClockGaugeView
     private lateinit var dateView: TextView
     private lateinit var statusView: TextView
@@ -62,11 +64,18 @@ class HomeActivity : Activity() {
     private lateinit var gaugeNet: GaugeView
     private lateinit var lamps: LinearLayout
     private lateinit var bloom: View
+    private lateinit var ambient: AmbientGlowView
+    private lateinit var gearRail: GearRailView
+    private lateinit var weatherRow: View
+    private lateinit var weatherIcon: ImageView
+    private lateinit var weatherText: TextView
 
     /** The size the views were measured at; a change means we must lay out again. */
     private var builtAtSize = DisplaySize.LARGE
     private lateinit var parked: View
-    private lateinit var parkedClock: TextView
+    private lateinit var parkedClock: OdometerClockView
+    private lateinit var parkedGroup: View
+    private lateinit var parkedWeather: TextView
     private lateinit var homePrompt: LinearLayout
 
     private lateinit var favRow: Row
@@ -74,6 +83,10 @@ class HomeActivity : Activity() {
     private lateinit var tvRow: Row
     private lateinit var allRow: Row
     private lateinit var sysRow: Row
+    private val rows: List<Row> get() = listOf(favRow, drivenRow, tvRow, allRow, sysRow)
+
+    /** Shared by every row; only the row holding focus draws it. */
+    private val reflection = Reflection(CardAdapter.FOCUS_SCALE)
 
     private val io = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
@@ -90,6 +103,18 @@ class HomeActivity : Activity() {
     private var wallpaperBitmap: Bitmap? = null
     private var wallpaperStamp = -1L
 
+    /** The focused app's colour, once its artwork has been read; 0 until then. */
+    private var focusedTint = 0
+    private var builtFont: Boolean? = null
+
+    private var weather: Weather.Now? = null
+    private var weatherFor: Weather.Place? = null
+    private var weatherBusy = false
+    private var weatherTriedAt = 0L
+
+    private var driftX = 1f
+    private var driftY = 0.62f
+
     private val backdropRunnable = Runnable {
         val entry = pendingBackdrop ?: return@Runnable
         art.load(entry) { showBackdrop(entry, it) }
@@ -99,6 +124,7 @@ class HomeActivity : Activity() {
     private val ticker = object : Runnable {
         override fun run() {
             updateClock()
+            maybeRefreshWeather()
             applyModeIfChanged()
             if (prefs.showStats) refreshStats()
             ui.postDelayed(this, TICK_MS)
@@ -106,6 +132,36 @@ class HomeActivity : Activity() {
     }
 
     private val parkRunnable = Runnable { enterParked() }
+
+    /**
+     * Creeps the parked clock along, a density-pixel at a time, bouncing off
+     * the safe area. Twice a second is plenty for something meant to move too
+     * slowly to watch, and it keeps the screen idle in between - which is the
+     * point of a screen that has faded out.
+     */
+    private val driftRunnable = object : Runnable {
+        override fun run() {
+            if (parked.visibility != View.VISIBLE || !prefs.driftingClock) return
+            val step = ThemeKit.dp(this@HomeActivity, 1f).toFloat()
+            val roomX = ((parked.width - parkedGroup.width) / 2f -
+                resources.getDimension(R.dimen.overscan_h)).coerceAtLeast(0f)
+            val roomY = ((parked.height - parkedGroup.height) / 2f -
+                resources.getDimension(R.dimen.overscan_v)).coerceAtLeast(0f)
+            var x = parkedGroup.translationX + driftX * step
+            var y = parkedGroup.translationY + driftY * step
+            if (x > roomX || x < -roomX) {
+                driftX = -driftX
+                x = x.coerceIn(-roomX, roomX)
+            }
+            if (y > roomY || y < -roomY) {
+                driftY = -driftY
+                y = y.coerceIn(-roomY, roomY)
+            }
+            parkedGroup.translationX = x
+            parkedGroup.translationY = y
+            ui.postDelayed(this, DRIFT_MS)
+        }
+    }
 
     private val packageWatcher = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = refreshApps()
@@ -138,8 +194,15 @@ class HomeActivity : Activity() {
         gaugeNet = findViewById(R.id.gaugeNet)
         lamps = findViewById(R.id.lamps)
         bloom = findViewById(R.id.bloom)
+        ambient = findViewById(R.id.ambient)
+        gearRail = findViewById(R.id.gearRail)
+        weatherRow = findViewById(R.id.weather)
+        weatherIcon = findViewById(R.id.weatherIcon)
+        weatherText = findViewById(R.id.weatherText)
         parked = findViewById(R.id.parked)
         parkedClock = findViewById(R.id.parkedClock)
+        parkedGroup = findViewById(R.id.parkedGroup)
+        parkedWeather = findViewById(R.id.parkedWeather)
         homePrompt = findViewById(R.id.homePrompt)
 
         favRow = Row(findViewById(R.id.titleFav), findViewById(R.id.rowFav))
@@ -155,7 +218,11 @@ class HomeActivity : Activity() {
             true
         }
 
+        weatherFor = prefs.weatherPlace
+        weather = prefs.lastWeather
+
         applyModeIfChanged()
+        applyShowroom()
         if (prefs.ignition) startIgnition()
         checkForUpdate()
     }
@@ -168,11 +235,17 @@ class HomeActivity : Activity() {
             recreate()
             return
         }
+        applyShowroom()
+        maybeRefreshWeather()
         applyModeIfChanged()
+        renderWeather()
         applyWallpaper()
         refreshApps()
         updateClock()
         updateHomePrompt()
+        // Coming back from an app does not fire a focus change, so the card that
+        // still holds focus has to be lit again by hand.
+        focusedCard?.takeIf { it.hasFocus() }?.let { applyGlow(it, focusedTint) }
         ui.removeCallbacks(ticker)
         ui.post(ticker)
         registerPackageWatcher()
@@ -184,6 +257,8 @@ class HomeActivity : Activity() {
         ui.removeCallbacks(ticker)
         ui.removeCallbacks(parkRunnable)
         snapOutOfParked()
+        // Nobody can see it behind an app, so stop it asking for frames.
+        EdgeLight.detach(focusedCard)
         runCatching { unregisterReceiver(packageWatcher) }
     }
 
@@ -193,6 +268,8 @@ class HomeActivity : Activity() {
         gaugeRam.stopAnimation()
         gaugeDisk.stopAnimation()
         gaugeNet.stopAnimation()
+        EdgeLight.detach(focusedCard)
+        reflection.clear()
         focusedCard = null
         icons.shutdown()
         art.shutdown()
@@ -243,7 +320,7 @@ class HomeActivity : Activity() {
 
     /** With Adaptive on this changes by itself, so the ticker re-checks it. */
     private fun currentModeIndex(): Int =
-        prefs.effectiveModeIndex(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+        prefs.effectiveModeIndex(Calendar.getInstance().get(Calendar.HOUR_OF_DAY), usableWeather())
 
     private fun applyModeIfChanged() {
         val wanted = currentModeIndex()
@@ -254,8 +331,11 @@ class HomeActivity : Activity() {
         background.mode = mode
         window.setBackgroundDrawable(GradientDrawable().apply { setColor(mode.ground) })
 
-        clockView.setTextColor(mode.ink)
-        parkedClock.setTextColor(mode.ink)
+        clockView.textColor = mode.ink
+        parkedClock.textColor = mode.ink
+        parkedWeather.setTextColor(mode.ink)
+        weatherText.setTextColor(mode.dim)
+        weatherIcon.setColorFilter(mode.glow)
         dateView.setTextColor(mode.dim)
         statusView.setTextColor(mode.dim)
         emptyView.setTextColor(mode.dim)
@@ -279,9 +359,17 @@ class HomeActivity : Activity() {
         // bright photo.
         parked.setBackgroundColor(ThemeKit.withAlpha(mode.ground, 0.22f))
 
-        listOf(R.id.titleFav, R.id.titleTv, R.id.titleAll, R.id.titleSys).forEach {
-            findViewById<TextView>(it).setTextColor(mode.dim)
-        }
+        rows.forEach { it.title.setTextColor(mode.dim) }
+
+        gearRail.glow = mode.glow
+        gearRail.ink = mode.ink
+        gearRail.dim = mode.dim
+        gearRail.ground = mode.ground
+
+        // The reflection only makes sense on a wet road, and the edge glow
+        // has to pick up the new mode's colour on the next focus.
+        if (mode != DriveMode.WET) reflection.clear()
+        ambient.off()
 
         // Card backgrounds are baked when a holder is created, so the adapters
         // have to be rebuilt for a new Drive Mode to reach recycled views.
@@ -294,6 +382,7 @@ class HomeActivity : Activity() {
 
     private fun startIgnition() {
         igniting = true
+        gearRail.alpha = 0f
         content.alpha = 0f
         content.translationY = ThemeKit.dp(this, 22f).toFloat()
 
@@ -321,6 +410,7 @@ class HomeActivity : Activity() {
         ui.postDelayed({
             if (!igniting) return@postDelayed
             content.animate().alpha(1f).translationY(0f).setDuration(560L).start()
+            gearRail.animate().alpha(1f).setDuration(560L).start()
         }, 680L)
         ui.postDelayed({ if (igniting) finishIgnition() }, 1500L)
     }
@@ -329,6 +419,8 @@ class HomeActivity : Activity() {
         igniting = false
         content.animate().cancel()
         bloom.animate().cancel()
+        gearRail.animate().cancel()
+        gearRail.alpha = 1f
         content.alpha = 1f
         content.translationY = 0f
         bloom.alpha = 0f
@@ -371,8 +463,13 @@ class HomeActivity : Activity() {
         fadeTo(scroller, 0f, FADE_OUT_MS)
         fadeTo(backdrop, 0f, FADE_OUT_MS)
         fadeTo(scrim, 0f, FADE_OUT_MS)
+        fadeTo(gearRail, 0f, FADE_OUT_MS)
+        fadeTo(ambient, 0f, FADE_OUT_MS)
+        EdgeLight.detach(focusedCard)
 
         setBrightness(PARKED_BRIGHTNESS)
+        ui.removeCallbacks(driftRunnable)
+        if (prefs.driftingClock) ui.postDelayed(driftRunnable, DRIFT_MS)
     }
 
     private fun leaveParked() {
@@ -387,6 +484,10 @@ class HomeActivity : Activity() {
             .start()
 
         fadeTo(scroller, 1f, FADE_IN_MS)
+        fadeTo(gearRail, 1f, FADE_IN_MS)
+        fadeTo(ambient, 1f, FADE_IN_MS)
+        ui.removeCallbacks(driftRunnable)
+        focusedCard?.takeIf { it.hasFocus() }?.let { applyGlow(it, focusedTint) }
         // The artwork belongs to whichever card holds focus, so it is put back
         // to its resting state rather than to whatever alpha it happened to
         // have when the screen faded.
@@ -407,6 +508,11 @@ class HomeActivity : Activity() {
         parked.alpha = 0f
         scroller.animate().cancel()
         scroller.alpha = 1f
+        gearRail.animate().cancel()
+        gearRail.alpha = 1f
+        ambient.animate().cancel()
+        ambient.alpha = 1f
+        ui.removeCallbacks(driftRunnable)
         setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
     }
 
@@ -429,7 +535,7 @@ class HomeActivity : Activity() {
 
     // ------------------------------------------------------------------ rows
 
-    private inner class Row(private val title: TextView, private val list: RecyclerView) {
+    private inner class Row(val title: TextView, val list: RecyclerView) {
 
         private var adapter: CardAdapter? = null
         private var items: List<CardItem> = emptyList()
@@ -440,6 +546,7 @@ class HomeActivity : Activity() {
             list.setHasFixedSize(true)
             list.itemAnimator = null
             list.setItemViewCacheSize(6)
+            list.addItemDecoration(reflection)
         }
 
         fun rebuild() {
@@ -471,15 +578,33 @@ class HomeActivity : Activity() {
     /**
      * Focus moves faster than artwork loads while you hold a direction, so the
      * load is deferred briefly and superseded by whatever you land on.
+     *
+     * The artwork is fetched whenever any effect needs the app's colour - the
+     * edge light and the ambient glow as much as the backdrop - and only shown
+     * full-screen when the backdrop itself is switched on.
      */
     private fun onCardFocus(item: CardItem, view: View) {
         focusedCard = view
         focusedKey = item.app?.key
-        applyGlow(view, item.app?.let { art.cachedTint(it) } ?: 0)
+        focusedTint = item.app?.let { art.cachedTint(it) } ?: 0
+        applyGlow(view, focusedTint)
+        // An app whose colour is still loading keeps the current glow rather
+        // than dipping to the neutral wash and back, which would pulse the
+        // screen edges while you hold a direction.
+        if (focusedTint != 0 || item.app == null) glowAmbient(focusedTint)
+        engageGear(view)
+        // Posted: the focus listener runs before the card refreshes its drawable
+        // state, so a snapshot taken now would miss the focus ring.
+        if (prefs.reflection && mode == DriveMode.WET) {
+            ui.post { if (focusedCard === view) reflection.show(view) }
+        } else {
+            reflection.clear()
+        }
 
         ui.removeCallbacks(backdropRunnable)
         val app = item.app
-        if (!prefs.backdrop || app == null) {
+        val wantsArt = prefs.backdrop || prefs.ambientGlow || prefs.edgeLight
+        if (!wantsArt || app == null) {
             clearBackdrop()
             return
         }
@@ -491,17 +616,25 @@ class HomeActivity : Activity() {
         if (isFinishing || isDestroyed) return
         if (pendingBackdrop?.key != entry.key) return
         if (found == null) {
+            // No artwork at all: settle the edges on the neutral wash.
+            if (focusedKey == entry.key) glowAmbient(0)
             clearBackdrop()
             return
         }
 
-        backdrop.setImageBitmap(found.bitmap)
-
-        // The artwork arrives after focus moved, so the ring is repainted now
-        // that its colour is finally known.
-        if (found.tint != 0 && focusedKey == entry.key) {
-            focusedCard?.let { applyGlow(it, found.tint) }
+        // The artwork arrives after focus moved, so everything coloured by the
+        // app is repainted now that its colour is finally known - including
+        // "no colour", or the edges would keep the previous app's.
+        if (focusedKey == entry.key) {
+            if (found.tint != 0) {
+                focusedTint = found.tint
+                focusedCard?.let { applyGlow(it, found.tint) }
+            }
+            glowAmbient(found.tint)
         }
+        if (!prefs.backdrop) return
+
+        backdrop.setImageBitmap(found.bitmap)
 
         // Held well back from full strength: this sits under a clock and four
         // rows of text, and legibility beats spectacle on a screen read from
@@ -521,15 +654,57 @@ class HomeActivity : Activity() {
         scrim.animate().alpha(1f).setDuration(380L).start()
     }
 
-    /** Repaints one card's ring and bloom. Only ever the focused card, so the
-     *  fresh drawable costs nothing worth measuring. */
+    /**
+     * Repaints one card's ring, bloom and edge light. Only ever the focused
+     * card, so the fresh drawable costs nothing worth measuring.
+     */
     private fun applyGlow(view: View, tint: Int) {
         val glow = if (tint == 0) mode.glow else tint
-        view.background = ThemeKit.cardSelector(this, mode, 14f, glow)
+        val lit = prefs.edgeLight
+        view.background = ThemeKit.cardSelector(this, mode, 14f, glow, if (lit) 0.35f else 1f)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             view.outlineSpotShadowColor = glow
             view.outlineAmbientShadowColor = glow
         }
+        // Artwork can land after focus has moved off the cards altogether, onto
+        // the home prompt say; a light on a card nobody is on would never stop.
+        if (lit && view.hasFocus()) EdgeLight.attach(view, glow) else EdgeLight.detach(view)
+        if (reflection.active) ui.post { reflection.refresh() }
+    }
+
+    /** Strong for an app with a colour of its own, a faint wash of the mode otherwise. */
+    private fun glowAmbient(tint: Int) {
+        if (!prefs.ambientGlow) {
+            ambient.off()
+            return
+        }
+        ambient.glowTo(
+            if (tint == 0) ThemeKit.withAlpha(mode.glow, 0.14f)
+            else ThemeKit.withAlpha(tint, 0.42f)
+        )
+    }
+
+    // -------------------------------------------------------------- gear rail
+
+    /** Rows that are showing, in the order they appear on screen. */
+    private fun visibleRows(): List<Row> = rows
+        .filter { it.list.visibility == View.VISIBLE }
+        .sortedBy { content.indexOfChild(it.list) }
+
+    /** One letter per showing row, taken from its title so renamed rows follow. */
+    private fun updateGears() {
+        gearRail.setGears(
+            visibleRows().map {
+                it.title.text.toString().trim().take(1).uppercase(Locale.getDefault())
+            }
+        )
+        focusedCard?.let { engageGear(it) }
+    }
+
+    private fun engageGear(card: View) {
+        val list = card.parent as? RecyclerView ?: return
+        val index = visibleRows().indexOfFirst { it.list === list }
+        if (index >= 0) gearRail.engage(index)
     }
 
     private fun clearBackdrop() {
@@ -611,6 +786,7 @@ class HomeActivity : Activity() {
         sysRow.submit(if (prefs.showSystemRow) systemTiles() else emptyList())
 
         emptyView.visibility = if (everything.isEmpty()) View.VISIBLE else View.GONE
+        updateGears()
     }
 
     /** Real TV apps get a wide 16:9 banner card; sideloaded apps get an icon tile. */
@@ -815,8 +991,8 @@ class HomeActivity : Activity() {
         val now = Date()
         val pattern = if (prefs.clock24h) "HH:mm" else "h:mm a"
         val time = SimpleDateFormat(pattern, Locale.getDefault()).format(now)
-        clockView.text = time
-        parkedClock.text = time
+        clockView.setText(time)
+        parkedClock.setText(time)
         dateView.text = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault())
             .format(now)
             .uppercase(Locale.getDefault())
@@ -912,6 +1088,135 @@ class HomeActivity : Activity() {
         }
     }
 
+    // --------------------------------------------------------------- showroom
+
+    /** Everything Settings can switch on or off, re-read on every return here. */
+    private fun applyShowroom() {
+        background.living = prefs.livingBackground
+        clockView.rolling = prefs.rollingClock
+        parkedClock.rolling = prefs.rollingClock
+
+        // The rail lives in the overscan gutter; the rows step aside a little so
+        // a focused card, scaled up, never slides underneath it.
+        val rail = prefs.gearRail
+        gearRail.visibility = if (rail) View.VISIBLE else View.GONE
+        val inset = if (rail) ThemeKit.dp(this, RAIL_INSET_DP) else 0
+        if (content.paddingStart != inset) {
+            content.setPaddingRelative(
+                inset, content.paddingTop, content.paddingEnd, content.paddingBottom
+            )
+        }
+
+        if (!prefs.ambientGlow) ambient.off()
+        if (!prefs.reflection) reflection.clear()
+        if (!prefs.edgeLight) EdgeLight.detach(focusedCard)
+
+        applyTypography()
+        updateGears()
+    }
+
+    /**
+     * Orbitron and Rajdhani run smaller than Roboto at the same point size -
+     * Orbitron wider, Rajdhani shorter - so each switch carries its own sizes
+     * rather than reusing the system font's.
+     */
+    private fun applyTypography() {
+        val on = prefs.dashFont
+        if (builtFont == on) return
+        builtFont = on
+
+        val display = Fonts.display(this, on)
+        val label = Fonts.label(this, on)
+        val labelBold = Fonts.labelBold(this, on)
+
+        clockView.setTypeface(display)
+        parkedClock.setTypeface(display)
+        clockView.setTextSizePx(sp(if (on) 50f else 56f))
+        parkedClock.setTextSizePx(sp(if (on) 86f else 96f))
+
+        dateView.typeface = label
+        dateView.textSize = if (on) 17f else 15f
+        statusView.typeface = label
+        statusView.textSize = if (on) 14f else 12f
+        weatherText.typeface = label
+        weatherText.textSize = if (on) 16f else 14f
+        parkedWeather.typeface = label
+        parkedWeather.textSize = if (on) 21f else 18f
+
+        rows.forEach {
+            it.title.typeface = labelBold
+            it.title.textSize = if (on) 16f else 14f
+        }
+        listOf(gaugeRam, gaugeDisk, gaugeNet).forEach { it.face = if (on) labelBold else null }
+        gearRail.setTypeface(labelBold)
+    }
+
+    private fun sp(value: Float): Float =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
+
+    // ---------------------------------------------------------------- weather
+
+    /** The reading, unless it is so old it would be lying about the sky. */
+    private fun usableWeather(): Weather.Now? = weather?.takeIf {
+        prefs.weatherPlace != null &&
+            System.currentTimeMillis() - it.fetchedAt < WEATHER_STALE_MS
+    }
+
+    private fun maybeRefreshWeather() {
+        val place = prefs.weatherPlace
+        if (place != weatherFor) {
+            // A new place, or none: whatever we had belongs to somewhere else.
+            weatherFor = place
+            weather = null
+            weatherTriedAt = 0L
+            renderWeather()
+        }
+        if (place == null) return
+
+        val now = System.currentTimeMillis()
+        val have = weather
+        if (have != null && now - have.fetchedAt < Weather.REFRESH_MS) return
+        if (weatherBusy || now - weatherTriedAt < WEATHER_RETRY_MS) return
+        weatherBusy = true
+        weatherTriedAt = now
+
+        io.execute {
+            val fresh = Weather.current(place)
+            ui.post {
+                weatherBusy = false
+                if (isFinishing || isDestroyed || fresh == null) return@post
+                if (prefs.weatherPlace != place) return@post
+                weather = fresh
+                prefs.lastWeather = fresh
+                renderWeather()
+                // Adaptive mode may want the rain now.
+                applyModeIfChanged()
+            }
+        }
+    }
+
+    private fun renderWeather() {
+        val now = usableWeather()
+        val place = prefs.weatherPlace
+        if (now == null || place == null) {
+            weatherRow.visibility = View.GONE
+            parkedWeather.visibility = View.GONE
+            return
+        }
+        val line = getString(
+            R.string.weather_line,
+            now.temperatureC.roundToInt(),
+            getString(Weather.labelRes(now.kind)),
+            place.name.substringBefore(',').uppercase(Locale.getDefault())
+        )
+        weatherIcon.setImageResource(Weather.glyphRes(now))
+        weatherIcon.setColorFilter(mode.glow)
+        weatherText.text = line
+        weatherRow.visibility = View.VISIBLE
+        parkedWeather.text = line
+        parkedWeather.visibility = View.VISIBLE
+    }
+
     // ------------------------------------------------------------ housekeeping
 
     private fun updateHomePrompt() {
@@ -969,6 +1274,17 @@ class HomeActivity : Activity() {
         const val BACKDROP_DELAY_MS = 220L
         const val NET_FULL_SCALE = 25.0
         const val DRIVEN_LIMIT = 8
+
+        /** How far the rows step right to clear the gear rail. */
+        const val RAIL_INSET_DP = 12f
+
+        const val DRIFT_MS = 500L
+
+        /** After a failed fetch; the regular refresh is Weather.REFRESH_MS. */
+        const val WEATHER_RETRY_MS = 5L * 60L * 1000L
+
+        /** Older than this and the chip hides rather than show yesterday's sky. */
+        const val WEATHER_STALE_MS = 3L * 60L * 60L * 1000L
 
         /** Slow going, quick coming back: leaving should settle, returning should not. */
         const val FADE_OUT_MS = 1600L

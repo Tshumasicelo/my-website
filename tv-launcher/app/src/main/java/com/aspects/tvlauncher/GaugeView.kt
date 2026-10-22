@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.DecelerateInterpolator
@@ -28,6 +29,13 @@ class GaugeView @JvmOverloads constructor(
 
     var label: String = ""
     var reading: String = ""
+
+    /** The dashboard face, or null for the system font with synthetic bold. */
+    var face: Typeface? = null
+        set(value) {
+            field = value
+            invalidate()
+        }
 
     var fraction: Float = 0f
         private set
@@ -120,13 +128,14 @@ class GaugeView @JvmOverloads constructor(
         solid.color = colour
         canvas.drawCircle(cx, cy, w * 0.045f, solid)
 
+        text.typeface = face
         text.color = 0xFFFFFFFF.toInt()
-        text.textSize = w * 0.185f
-        text.isFakeBoldText = true
+        text.textSize = w * (if (face == null) 0.185f else 0.21f)
+        text.isFakeBoldText = face == null
         canvas.drawText(reading, cx, cy + w * 0.20f, text)
 
         text.color = dim
-        text.textSize = w * 0.125f
+        text.textSize = w * (if (face == null) 0.125f else 0.145f)
         text.isFakeBoldText = false
         canvas.drawText(label, cx, cy + w * 0.375f, text)
     }

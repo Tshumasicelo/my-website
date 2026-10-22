@@ -43,6 +43,12 @@
         android:layout_height="match_parent"
         android:alpha="0" />
 
+    <!-- Ambilight: the screen edges take the focused app's colour. -->
+    <com.aspects.tvlauncher.AmbientGlowView
+        android:id="@+id/ambient"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
     <ScrollView
         android:id="@+id/scroller"
         android:layout_width="match_parent"
@@ -118,14 +124,11 @@
                     android:layout_weight="1"
                     android:orientation="vertical">
 
-                    <TextView
+                    <!-- Digits roll over like an odometer; sized in code. -->
+                    <com.aspects.tvlauncher.OdometerClockView
                         android:id="@+id/clock"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:includeFontPadding="false"
-                        android:textColor="#FFFFFF"
-                        android:textSize="56sp"
-                        android:textStyle="bold" />
+                        android:layout_height="wrap_content" />
 
                     <TextView
                         android:id="@+id/date"
@@ -134,6 +137,31 @@
                         android:layout_marginTop="4dp"
                         android:letterSpacing="0.06"
                         android:textSize="15sp" />
+
+                    <!-- Shown once a weather location is set in Settings. -->
+                    <LinearLayout
+                        android:id="@+id/weather"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:id="@+id/weatherIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@null" />
+
+                        <TextView
+                            android:id="@+id/weatherText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:letterSpacing="0.06"
+                            android:textSize="14sp" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <LinearLayout
@@ -218,6 +246,15 @@
         </LinearLayout>
     </ScrollView>
 
+    <!-- Gear selector: one letter per row, a marker on the row with focus. -->
+    <com.aspects.tvlauncher.GearRailView
+        android:id="@+id/gearRail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:layout_marginStart="8dp"
+        android:visibility="gone" />
+
     <!-- Headlight wash for the ignition sequence. -->
     <View
         android:id="@+id/bloom"
@@ -235,15 +272,29 @@
         android:focusable="false"
         android:visibility="gone">
 
-        <TextView
-            android:id="@+id/parkedClock"
+        <!-- Moves as one, so the drift never separates clock from weather. -->
+        <LinearLayout
+            android:id="@+id/parkedGroup"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:alpha="0.55"
-            android:includeFontPadding="false"
-            android:textColor="#FFFFFF"
-            android:textSize="96sp"
-            android:textStyle="bold" />
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <com.aspects.tvlauncher.OdometerClockView
+                android:id="@+id/parkedClock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/parkedWeather"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:letterSpacing="0.08"
+                android:textSize="18sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </FrameLayout>
 </FrameLayout>
