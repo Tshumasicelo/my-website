@@ -10,6 +10,13 @@ on:
 permissions:
   contents: write
 
+# Every run deletes and recreates the same tv-latest release, so two runs at
+# once race: one removes the tag while the other is publishing against it
+# ("Published releases must have a valid tag"). Queue them instead.
+concurrency:
+  group: tv-latest
+  cancel-in-progress: false
+
 jobs:
   apk:
     runs-on: ubuntu-latest
