@@ -91,11 +91,22 @@ async function waitToast(page, re, timeout = 6000) {
 }
 async function addViaUI(page, type, amount, note, date) {
   await page.evaluate(() => { document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-overview"); });
+  const rows = await page.evaluate(() => S.tx.length);
   await page.click(`#view-overview [data-open-tx="${type}"]`);
+  // Let the dialog finish sliding in. A click while the sheet still moves can land
+  // on the backdrop, which closes the dialog without saving — on slower runners
+  // (WebKit on macOS) that silently lost the row and failed seven later checks.
+  await page.waitForFunction(() => {
+    const m = document.getElementById("txModal");
+    return m.classList.contains("open") && m.getAnimations({ subtree: true }).every(a => a.playState !== "running");
+  });
   await page.fill("#txAmount", String(amount));
   await page.fill("#txNote", note);
   if (date) await page.fill("#txDate", date);
   await page.click("#txConfirm");
+  await page.waitForFunction(() => !document.getElementById("txModal").classList.contains("open"));
+  // Fail here, by name, rather than as a wrong row count further down.
+  if (await page.evaluate(() => S.tx.length) !== rows + 1) throw new Error(`adding "${note}" through the dialog did not record it`);
   await sleep(200);
 }
 async function goto(page, url = BASE) { await page.goto(url, { waitUntil: "load" }); await sleep(600); }
