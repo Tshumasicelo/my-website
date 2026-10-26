@@ -298,14 +298,23 @@ async function waitSplashGone(p, ms) {
 }
 let fresh = await ctx.newPage();           // a new tab is a new launch
 fresh.on("pageerror", e => errors.push(e.message));
+// Timestamp the splash from inside the page: when it starts and when the exit
+// (the first moment any of the app shows) begins. A stopwatch in the test would
+// start only after "load", which on a slow runner is a second late.
+await fresh.addInitScript(() => {
+  new MutationObserver(() => {
+    const root = document.documentElement, sp = document.getElementById("splash");
+    if (root && root.classList.contains("splash-on") && window.__spOn == null) window.__spOn = performance.now();
+    if (sp && sp.classList.contains("sp-out") && window.__spOut == null) window.__spOut = performance.now();
+  }).observe(document, { attributes: true, subtree: true, attributeFilter: ["class"] });
+});
 await fresh.goto(BASE, { waitUntil: "load" });
-const splashStart = Date.now();
 check("splash: plays on a fresh launch", await splashOn(fresh));
 check("splash: shows the slogan", /Less\s*guessing,\s*more\s*growing\./.test((await fresh.textContent("#splash")).replace(/\s+/g, " ")));
-// The brief: at least 4.5 s of animation before the app's UI shows.
-await sleep(Math.max(0, 4400 - (Date.now() - splashStart)));
-check("splash: still playing at 4.4 s", await splashOn(fresh));
 check("splash: lifts by itself", await waitSplashGone(fresh, 9000));
+// The brief: at least 4.5 s of animation before the app's UI shows.
+const shownMs = await fresh.evaluate(() => window.__spOut - window.__spOn);
+check("splash: app stays covered for at least 4.5 s", shownMs >= 4500, Math.round(shownMs) + " ms");
 await fresh.reload({ waitUntil: "load" });
 check("splash: not replayed on reload", !(await splashOn(fresh)));
 await fresh.close();
