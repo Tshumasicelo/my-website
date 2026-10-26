@@ -116,12 +116,9 @@ async function addViaUI(page, type, amount, note, date) {
 }
 async function goto(page, url = BASE) {
   await page.goto(url, { waitUntil: "load" });
-  // The opening animation plays on every load. Most checks are about what is
-  // underneath it, so skip it the way a person can: press any key.
-  if (await page.evaluate(() => document.documentElement.classList.contains("splash-on"))) {
-    await page.keyboard.press("Shift");
-    await page.waitForFunction(() => !document.documentElement.classList.contains("splash-on"), null, { timeout: 5000 });
-  }
+  // The opening animation plays in full on every load and cannot be skipped,
+  // so wait for it, as a person would.
+  await page.waitForFunction(() => !document.documentElement.classList.contains("splash-on"), null, { timeout: 9000 });
   await sleep(300);
 }
 const appVersion = page => page.evaluate(() => (typeof APP_VERSION !== "undefined" ? APP_VERSION : "old"));
@@ -338,7 +335,12 @@ fresh = await ctx.newPage();
 await fresh.goto(BASE, { waitUntil: "load" });
 await sleep(250);
 await fresh.mouse.click(200, 300);
-check("splash: a tap skips it", await waitSplashGone(fresh, 900));
+await fresh.keyboard.press("Escape");
+await fresh.keyboard.press("e");
+await sleep(700);
+check("splash: locked — taps and keys do not skip it", await splashOn(fresh));
+await waitSplashGone(fresh, 9000);
+check("splash: keys pressed during it do nothing behind it", await fresh.evaluate(() => !document.getElementById("txModal").classList.contains("open")));
 await fresh.close();
 
 fresh = await ctx.newPage();

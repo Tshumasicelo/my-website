@@ -586,12 +586,12 @@ select.input {
      2.75 "more growing." — and a rising arrow is drawn under it
      3.7  a living hold: slow push-in, city lights, the mark breathes
      4.6  exit. Motion stays snappy; the extra time goes to the story.
-   A tap or any key skips straight to the app.
+   It always plays in full: no tap or key skips it.
    ============================================================ */
 #splash { display: none; }
 .splash-on #splash {
   --sp-ink: #14151b; --sp-orange: #ff4d1f; --sp-gap: 124px;
-  display: block; position: fixed; inset: 0; z-index: 1000; overflow: hidden; cursor: pointer;
+  display: block; position: fixed; inset: 0; z-index: 1000; overflow: hidden;
   background: #0d0e13;
   -webkit-tap-highlight-color: transparent;
 }
@@ -687,7 +687,7 @@ select.input {
 @keyframes spLift    { to { transform: translateY(-50%) scale(1.06); opacity: 0; } }
 @keyframes spFade    { to { opacity: 0; } }
 
-/* Reduced motion: no movement — the finished frame, briefly, then a cut. */
+/* Reduced motion: no movement — the finished frame, held for the same time, then a cut. */
 @media (prefers-reduced-motion: reduce) {
   #splash, #splash * { animation-delay: 0s !important; }
   .sp-dash, .sp-lights, .sp-ring, .sp-scene { animation: none !important; }
@@ -734,36 +734,17 @@ select.input {
   </div>
 </div></div>
 <script>
-/* Plays the opening animation. */
+/* Plays the opening animation in full, every time: nothing skips it. */
 (function () {
-  var root = document.documentElement, el = document.getElementById("splash"), timer = null, playing = false;
+  var root = document.documentElement, el = document.getElementById("splash");
   if (!el) return;
+  var SHOW_MS = 4600, EXIT_MS = 640;
   var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var SHOW_MS = reduce ? 1500 : 4600, EXIT_MS = 640, SKIP_SPEED = 1.6;
 
-  function finish(e) {
-    if (!playing) return;
-    playing = false;
-    clearTimeout(timer);
-    window.removeEventListener("keydown", finish, true);
+  setTimeout(function () {
     el.classList.add("sp-out");
-    // A skip (tap or key) leaves faster than the natural ending.
-    var speed = e && el.getAnimations ? SKIP_SPEED : 1;
-    if (speed !== 1) el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = speed; });
-    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : EXIT_MS / speed);
-  }
-  function play() {
-    el.classList.remove("sp-out");
-    root.classList.remove("splash-on");
-    void el.offsetWidth;                    // restart every CSS animation from frame one
-    root.classList.add("splash-on");
-    playing = true;
-    clearTimeout(timer);
-    timer = setTimeout(finish, SHOW_MS);
-    window.addEventListener("keydown", finish, true);
-  }
-  el.addEventListener("pointerdown", finish);
-  if (root.classList.contains("splash-on")) play();
+    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : EXIT_MS);
+  }, SHOW_MS);
 })();
 </script>
 
@@ -3291,6 +3272,7 @@ function wire() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSheet ? closeModal() : openPalette(); return; }
 
     if (openSheet) return;
+    if (document.documentElement.classList.contains("splash-on")) return;   // nothing happens behind the opening animation
     const el = document.activeElement;
     if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
