@@ -252,7 +252,7 @@ const incPath = path.join(work, "incoming.json");
 fs.writeFileSync(incPath, JSON.stringify(incoming));
 await page.setInputFiles("#importFile", incPath);
 await sleep(300);
-check("import: asks merge or replace", /Merge or replace/.test(await page.textContent("#confirmTitle")));
+check("import: asks add or replace", /Add to your records, or replace them\?/.test(await page.textContent("#confirmTitle")));
 check("import: summary mentions unreadable rows", /1 unreadable/.test(await page.textContent("#confirmBody")));
 check("import: Replace locked until REPLACE typed", await page.isDisabled("#confirmYes"));
 await page.focus("#confirmPhrase");

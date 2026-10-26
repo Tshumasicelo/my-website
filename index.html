@@ -607,6 +607,9 @@ select.input {
      4.6  exit. Motion stays snappy; the extra time goes to the story.
    A tap or any key skips straight to the app.
    ============================================================ */
+/* Keyboard shortcuts mean nothing on a touch-only phone or tablet. */
+@media (hover: none) and (pointer: coarse) { .kb-only { display: none; } }
+
 #splash { display: none; }
 .splash-on #splash {
   --sp-ink: #14151b; --sp-orange: #ff4d1f; --sp-gap: 124px;
@@ -973,12 +976,11 @@ select.input {
   <div class="grid grid-2">
     <div class="card">
       <div class="card-head"><h3>Backup</h3></div>
-      <p class="hint" style="margin-bottom:14px;">Your data lives only in this browser and is never uploaded — anyone using this browser profile can see it. Export regularly: clearing site data erases everything.</p>
-      <div class="row" style="gap:9px;">
-        <button class="btn btn-primary btn-block" id="exportBtn">⬇ Export JSON</button>
-        <button class="btn btn-ghost btn-block" id="importBtn">⬆ Import</button>
-      </div>
-      <button class="btn btn-ghost btn-block" id="csvBtn" style="margin-top:9px;">⬇ Transactions as CSV</button>
+      <p class="hint" style="margin-bottom:14px;">Your records are kept on this device only and are never uploaded. Now and then, save a backup: it's a file that gets everything back if you change phones or clear your browser.</p>
+      <button class="btn btn-primary btn-block" id="exportBtn">💾 Save a backup</button>
+      <button class="btn btn-ghost btn-block" id="importBtn" style="margin-top:9px;">♻️ Restore from a backup</button>
+      <button class="btn btn-ghost btn-block" id="csvBtn" style="margin-top:9px;">📊 Download as a spreadsheet</button>
+      <p class="hint" style="margin-top:8px;">The spreadsheet opens in Excel or Google Sheets, for viewing your transactions. To bring records back into ASPECTS, use a backup.</p>
       <input type="file" id="importFile" accept="application/json,.json" class="sr-only" aria-label="Choose a backup file">
       <p class="hint" id="storageInfo" style="margin-top:12px;"></p>
       <p class="hint" id="storageHealth" style="margin-top:6px;"></p>
@@ -1005,8 +1007,10 @@ select.input {
           <button class="btn btn-ghost btn-sm" id="splashReplay">▶ Replay</button>
         </div>
       </div>
-      <div class="card-head" style="margin:20px 0 10px;"><h3>Keyboard</h3></div>
-      <div class="shortcut-list" id="shortcutList"></div>
+      <div class="kb-only">
+        <div class="card-head" style="margin:20px 0 10px;"><h3>Keyboard</h3></div>
+        <div class="shortcut-list" id="shortcutList"></div>
+      </div>
     </div>
   </div>
 
@@ -2081,11 +2085,10 @@ function renderSettings() {
   $("#themeSelect").value = S.theme || "dark";
   $("#splashSelect").value = splashPref();
   try {
-    const bytes = new Blob([JSON.stringify(S)]).size;
     $("#storageInfo").textContent = S.tx.length + " transactions · " + S.tasks.length + " tasks · " +
-      S.goals.length + " goals · " + (bytes / 1024).toFixed(1) + " KB stored" +
+      S.goals.length + " goals" +
       (S.invalidTx.length ? " · " + S.invalidTx.length + " unreadable rows kept aside" : "") +
-      " · last backup " + (S.lastBackup ? relDay(S.lastBackup) : "never");
+      " · last backup: " + (S.lastBackup ? relDay(S.lastBackup) : "never");
   } catch (_) { $("#storageInfo").textContent = ""; }
 
   renderStorageHealth();
@@ -2267,9 +2270,9 @@ function renderStorageHealth() {
   $("#rescueBtn").hidden = !(storageIssue && storageIssue.raw);
   if (storageIssue) { el.textContent = "⚠️ " + storageIssue.message; return; }
   el.textContent = persisted === true
-    ? "🔒 This browser has agreed to keep your data even when the device is low on space."
+    ? "🔒 This device has agreed to keep your records safe, even when storage runs low."
     : persisted === false
-      ? "The browser may clear this data if the device runs low on space — and Safari can after 7 days without a visit unless ASPECTS is on the Home Screen. Installing the app and exporting backups protect it."
+      ? "If this device runs very low on storage it may delete these records — and Safari does after 7 days unused, unless ASPECTS is on your Home Screen. Saving a backup keeps them safe."
       : "";
 }
 
@@ -2709,7 +2712,7 @@ function exportData(prefix = "aspects-backup-") {
     downloadFile(prefix + todayKey() + ".json", JSON.stringify(S, null, 2), "application/json");
     save();
     renderSettings();
-    toast("Backup downloaded", "good", "💾");
+    toast("Backup saved — it's in your Downloads", "good", "💾");
     return true;
   } catch (err) {
     console.error(err);
@@ -2737,7 +2740,7 @@ function exportCSV() {
   });
   try {
     downloadFile("aspects-transactions-" + todayKey() + ".csv", "﻿" + rows.map(r => r.join(",")).join("\r\n"), "text/csv");
-    toast(S.tx.length + " transactions exported", "good", "📄");
+    toast("Spreadsheet saved — it's in your Downloads", "good", "📊");
   } catch (err) {
     console.error(err);
     toast("Export failed", "bad", "⚠️");
@@ -2749,7 +2752,7 @@ function importData(file) {
   reader.onload = () => {
     let parsed;
     try { parsed = JSON.parse(reader.result); }
-    catch (_) { toast("That file is not valid JSON", "bad", "⚠️"); return; }
+    catch (_) { toast("That file isn't an ASPECTS backup", "bad", "⚠️"); return; }
 
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.tx)) {
       toast("That does not look like an ASPECTS backup", "bad", "⚠️");
@@ -2767,17 +2770,17 @@ function importData(file) {
     const bad = incoming.invalidTx.length - knownBad;
     const summary = "This backup holds " + incoming.tx.length + " transactions, " + incoming.tasks.length +
       " tasks and " + incoming.goals.length + " goals" +
-      (bad ? " (plus " + bad + " unreadable rows, which are kept aside and not counted)" : "") + ".";
+      (bad ? " (plus " + bad + " unreadable " + (bad === 1 ? "entry" : "entries") + ", kept aside and not counted)" : "") + ".";
 
     if (!S.tx.length && !S.tasks.length && !S.goals.length) {
       ask("Restore this backup?", summary, () => replaceWith(incoming), null, { yes: "Restore" });
       return;
     }
-    ask("Merge or replace?",
-        summary + " Merge adds only what this browser doesn't already have — duplicates are skipped and nothing here is removed. " +
-        "Replace deletes the data in this browser and uses the backup instead; a copy of your current data is downloaded first.",
+    ask("Add to your records, or replace them?",
+        summary + " “Add what's missing” keeps everything here and adds only what isn't here yet — nothing gets doubled. " +
+        "“Replace everything” deletes what's here and uses the backup instead (a copy of your current records is saved first).",
         () => replaceWith(incoming), "REPLACE",
-        { yes: "Replace", alt: { label: "Merge", run: () => mergeIn(incoming) } });
+        { yes: "Replace everything", alt: { label: "Add what's missing", run: () => mergeIn(incoming) } });
   };
   reader.onerror = () => toast("Could not read that file", "bad", "⚠️");
   reader.readAsText(file);
@@ -2828,7 +2831,7 @@ function mergeIn(inc) {
   ui.lastBalance = null;
   applyRecurring();
   const skipped = inc.tx.length - added;
-  commit("Merged " + added + " transaction" + (added === 1 ? "" : "s") + (skipped ? " · " + skipped + " already here" : ""), "good", "🔀");
+  commit("Added " + added + " transaction" + (added === 1 ? "" : "s") + (skipped ? " · " + skipped + " were already here" : ""), "good", "➕");
 }
 
 function nukeAll() {
@@ -2871,8 +2874,9 @@ const COMMANDS = [
   { e: "⚙️", t: "Go to Settings",      k: "5",      run: () => setView("settings") },
   { e: "🎬", t: "Play opening animation", k: "",     run: replaySplash },
   { e: "🌓", t: "Toggle dark / light", k: "D",      run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
-  { e: "💾", t: "Export backup",       k: "",       run: () => exportData() },
-  { e: "📄", t: "Export transactions as CSV", k: "", run: exportCSV },
+  { e: "💾", t: "Save a backup",       k: "",       run: () => exportData() },
+  { e: "♻️", t: "Restore from a backup", k: "",     run: () => $("#importFile").click() },
+  { e: "📊", t: "Download as a spreadsheet", k: "", run: exportCSV },
   { e: "✨", t: "Check for updates",   k: "",       run: () => checkForUpdates(true) },
   { e: "☢️", t: "Erase all data",      k: "",       run: nukeAll }
 ];
