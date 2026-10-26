@@ -29,6 +29,11 @@ fs.mkdirSync(out, { recursive: true });
 const BASE = "http://localhost:" + PORT + "/";
 const KEY = "aspects.v2";
 const results = [];
+// The build under test, and what the next release would be called; read from the
+// code so a version bump never needs a test edit.
+const CUR = fs.readFileSync(path.join(repo, "index.html"), "utf8").match(/const APP_VERSION = "([^"]+)"/)[1];
+const NEXT = CUR.replace(/(\d+)$/, n => String(Number(n) + 1));
+const reEsc = v => v.replace(/\./g, "\\.");
 const check = (name, ok, detail = "") => { results.push({ name, ok: !!ok, detail }); console.log((ok ? "PASS " : "FAIL ") + name + (detail ? "  — " + detail : "")); };
 
 /* ---------- deploying builds into the served folder ---------- */
@@ -45,12 +50,12 @@ function deploy(kind) {
   let sw = fs.readFileSync(path.join(repo, "sw.js"), "utf8");
   let ver = fs.readFileSync(path.join(repo, "version.json"), "utf8");
   if (kind === "lagging") {   // version.json already says 9.9.9, the page isn't published yet
-    ver = ver.replace('"version": "1.1.0"', '"version": "9.9.9"').replace(/"notes": "[^"]*"/, '"notes": "Test notes"');
+    ver = ver.replace(`"version": "${CUR}"`, '"version": "9.9.9"').replace(/"notes": "[^"]*"/, '"notes": "Test notes"');
   }
   if (kind === "next") {   // what the next real deploy looks like: all three bumped
-    html = html.replace('const APP_VERSION = "1.1.0"', 'const APP_VERSION = "1.1.1"');
-    sw = sw.replace('CACHE_VERSION = "v1.1.0"', 'CACHE_VERSION = "v1.1.1"');
-    ver = ver.replace('"version": "1.1.0"', '"version": "1.1.1"');
+    html = html.replace(`const APP_VERSION = "${CUR}"`, `const APP_VERSION = "${NEXT}"`);
+    sw = sw.replace(`CACHE_VERSION = "v${CUR}"`, `CACHE_VERSION = "v${NEXT}"`);
+    ver = ver.replace(`"version": "${CUR}"`, `"version": "${NEXT}"`);
   }
   fs.writeFileSync(path.join(site, "index.html"), html);
   fs.writeFileSync(path.join(site, "sw.js"), sw);
@@ -91,14 +96,31 @@ async function waitToast(page, re, timeout = 6000) {
 }
 async function addViaUI(page, type, amount, note, date) {
   await page.evaluate(() => { document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "view-overview"); });
+  const rows = await page.evaluate(() => S.tx.length);
   await page.click(`#view-overview [data-open-tx="${type}"]`);
+  // Let the dialog finish sliding in. A click while the sheet still moves can land
+  // on the backdrop, which closes the dialog without saving — on slower runners
+  // (WebKit on macOS) that silently lost the row and failed seven later checks.
+  await page.waitForFunction(() => {
+    const m = document.getElementById("txModal");
+    return m.classList.contains("open") && m.getAnimations({ subtree: true }).every(a => a.playState !== "running");
+  });
   await page.fill("#txAmount", String(amount));
   await page.fill("#txNote", note);
   if (date) await page.fill("#txDate", date);
   await page.click("#txConfirm");
+  await page.waitForFunction(() => !document.getElementById("txModal").classList.contains("open"));
+  // Fail here, by name, rather than as a wrong row count further down.
+  if (await page.evaluate(() => S.tx.length) !== rows + 1) throw new Error(`adding "${note}" through the dialog did not record it`);
   await sleep(200);
 }
-async function goto(page, url = BASE) { await page.goto(url, { waitUntil: "load" }); await sleep(600); }
+async function goto(page, url = BASE) {
+  await page.goto(url, { waitUntil: "load" });
+  // The opening animation plays in full on every load and cannot be skipped,
+  // so wait for it, as a person would.
+  await page.waitForFunction(() => !document.documentElement.classList.contains("splash-on"), null, { timeout: 9000 });
+  await sleep(300);
+}
 const appVersion = page => page.evaluate(() => (typeof APP_VERSION !== "undefined" ? APP_VERSION : "old"));
 
 const now = new Date();
@@ -108,8 +130,21 @@ const sept = ymShift(-1), aug = ymShift(-2), lastYear = new Date(now.getFullYear
 /* ======================================================================== */
 console.log("browser:", BROWSER, "· baseline:", BASELINE, "· cdn:", BLOCK_CDN ? "blocked" : "live");
 deploy("old");
-const startServer = () => spawn(process.execPath, [path.join(here, "server.mjs"), site, String(PORT)], { stdio: "ignore" });
-let server = startServer();
+/* Resolves once the server says it is listening. If the port is taken (say, by a
+   server left over from a crashed run) it fails loudly instead of letting the
+   tests talk to someone else's stale files. */
+function startServer() {
+  const child = spawn(process.execPath, [path.join(here, "server.mjs"), site, String(PORT)], { stdio: ["ignore", "pipe", "pipe"] });
+  return new Promise((resolve, reject) => {
+    let err = "";
+    child.stderr.on("data", d => { err += d; });
+    child.stdout.on("data", d => { if (String(d).includes("serving")) resolve(child); });
+    child.on("exit", code => reject(new Error(`test server exited (code ${code}); is port ${PORT} already in use? ` +
+                                              (err.split("\n").find(l => /EADDRINUSE|Error/.test(l)) || ""))));
+  });
+}
+let server = await startServer();
+process.on("exit", () => server.kill());   // never leave a server behind, even after a crash
 await sleep(800);
 let ctx = await launch();
 let page = await ctx.newPage();
@@ -145,7 +180,7 @@ if (v === "old") {
   await sleep(1200);
   v = await appVersion(page);
 }
-check("upgrade: new build is running", v === "1.1.0", v);
+check("upgrade: new build is running", v === CUR, v);
 const after = await state(page);
 check("upgrade: every transaction survived", before.tx.every(t => after.tx.some(x => x.id === t.id && x.amount === t.amount && x.ts === t.ts && x.note === t.note && x.category === t.category)),
       after.tx.length + " rows");
@@ -156,7 +191,7 @@ for (let i = 0; i < 40; i++) {   // the quiet swap waits for the background vers
   if (!cachesNow.some(k => k.endsWith("v1.0.0"))) break;
   await sleep(250);
 }
-check("upgrade: old caches replaced by v1.1.0", cachesNow.some(k => k.endsWith("v1.1.0")) && !cachesNow.some(k => k.endsWith("v1.0.0")), cachesNow.join(","));
+check("upgrade: old caches replaced by v" + CUR, cachesNow.some(k => k.endsWith("v" + CUR)) && !cachesNow.some(k => k.endsWith("v1.0.0")), cachesNow.join(","));
 
 if (!BLOCK_CDN) {
   let charted = false;
@@ -199,16 +234,22 @@ await page.click("#toasts .toast button");
 await sleep(200);
 check("delete: Undo restores and saves it", (await state(page)).tx.some(t => t.id === "hist-sep"));
 
-/* ---- 6. CSV ---- */
+/* ---- 6. PDF report ---- */
 await page.evaluate(KEY => { const s = JSON.parse(localStorage.getItem(KEY)); s.tx.push({ id: "f1", type: "expense", amount: 1, category: "General", note: "=HYPERLINK(\"x\")", ts: new Date().toISOString() }); localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
 await goto(page);
 await page.click('.tab[data-view="settings"]');
-const [csvDl] = await Promise.all([page.waitForEvent("download"), page.click("#csvBtn")]);
-const csv = fs.readFileSync(await csvDl.path(), "utf8");
-const lines = csv.trim().split(/\r\n/);
-check("csv: header + one line per transaction", lines.length === 6 && lines[0].includes("Date,Time,Type"), lines.length + " lines");
-check("csv: formula text is neutralised", csv.includes(`"'=HYPERLINK(""x"")"`));
-check("csv: amounts stay numeric", /,1200\.50,-1200\.50,/.test(csv));
+await page.selectOption("#reportPeriod", "all");
+const [pdfDl] = await Promise.all([page.waitForEvent("download"), page.click("#reportBtn")]);
+const pdf = fs.readFileSync(await pdfDl.path(), "latin1");
+check("pdf: a real PDF file", pdf.startsWith("%PDF-1.4") && pdf.trimEnd().endsWith("%%EOF") &&
+      /^aspects-report-all-time-\d{4}-\d{2}-\d{2}\.pdf$/.test(pdfDl.suggestedFilename()), pdfDl.suggestedFilename());
+// Every cross-reference entry must point exactly at its object, or readers call the file damaged.
+const xrefAt = Number(pdf.match(/startxref\s+(\d+)/)[1]);
+const entries = pdf.slice(xrefAt).match(/^\d{10} \d{5} n $/gm) || [];
+check("pdf: internal index is exact", pdf.startsWith("xref", xrefAt) && entries.length > 4 &&
+      entries.every((e, i) => pdf.startsWith((i + 1) + " 0 obj", Number(e.slice(0, 10)))), entries.length + " objects");
+check("pdf: headline numbers and rows are in it", pdf.includes("(Money in)") && pdf.includes("(-R1,200.50)") && pdf.includes("(September rent)"));
+check("pdf: brackets in notes are escaped", pdf.includes('(=HYPERLINK\\("x"\\))'));
 
 /* ---- 7. JSON backup, merge, replace, undo ---- */
 const [jsonDl] = await Promise.all([page.waitForEvent("download"), page.click("#exportBtn")]);
@@ -223,7 +264,7 @@ const incPath = path.join(work, "incoming.json");
 fs.writeFileSync(incPath, JSON.stringify(incoming));
 await page.setInputFiles("#importFile", incPath);
 await sleep(300);
-check("import: asks merge or replace", /Merge or replace/.test(await page.textContent("#confirmTitle")));
+check("import: asks add or replace", /Add to your records, or replace them\?/.test(await page.textContent("#confirmTitle")));
 check("import: summary mentions unreadable rows", /1 unreadable/.test(await page.textContent("#confirmBody")));
 check("import: Replace locked until REPLACE typed", await page.isDisabled("#confirmYes"));
 await page.focus("#confirmPhrase");
@@ -258,12 +299,66 @@ s = await state(page);
 check("multi-tab: both tabs' entries kept", s.tx.some(t => t.note === "From tab A") && s.tx.some(t => t.note === "From tab B"), s.tx.length + " rows");
 await tabB.close();
 
+/* ---- 8b. Opening animation ----
+   Runs here, while one build is deployed: later sections swap builds back and
+   forth, and the offline-copy updater then reloads open tabs mid-check. */
+const splashOn = p => p.evaluate(() => document.documentElement.classList.contains("splash-on"));
+async function waitSplashGone(p, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (!(await splashOn(p))) return true; await sleep(100); }
+  return false;
+}
+let fresh = await ctx.newPage();           // a new tab is a new launch
+fresh.on("pageerror", e => errors.push(e.message));
+// Timestamp the splash from inside the page: when it starts and when the exit
+// (the first moment any of the app shows) begins. A stopwatch in the test would
+// start only after "load", which on a slow runner is a second late.
+await fresh.addInitScript(() => {
+  new MutationObserver(() => {
+    const root = document.documentElement, sp = document.getElementById("splash");
+    if (root && root.classList.contains("splash-on") && window.__spOn == null) window.__spOn = performance.now();
+    if (sp && sp.classList.contains("sp-out") && window.__spOut == null) window.__spOut = performance.now();
+  }).observe(document, { attributes: true, subtree: true, attributeFilter: ["class"] });
+});
+await fresh.goto(BASE, { waitUntil: "load" });
+check("splash: plays on a fresh launch", await splashOn(fresh));
+check("splash: shows the slogan", /Less\s*guessing,\s*more\s*growing\./.test((await fresh.textContent("#splash")).replace(/\s+/g, " ")));
+check("splash: lifts by itself", await waitSplashGone(fresh, 9000));
+// The brief: at least 4.5 s of animation before the app's UI shows.
+const shownMs = await fresh.evaluate(() => window.__spOut - window.__spOn);
+check("splash: app stays covered for at least 4.5 s", shownMs >= 4500, Math.round(shownMs) + " ms");
+await fresh.reload({ waitUntil: "load" });
+check("splash: plays again on refresh", await splashOn(fresh));
+await fresh.close();
+
+fresh = await ctx.newPage();
+await fresh.goto(BASE, { waitUntil: "load" });
+await sleep(250);
+await fresh.mouse.click(200, 300);
+await fresh.keyboard.press("Escape");
+await fresh.keyboard.press("e");
+await sleep(700);
+check("splash: locked — taps and keys do not skip it", await splashOn(fresh));
+await waitSplashGone(fresh, 9000);
+check("splash: keys pressed during it do nothing behind it", await fresh.evaluate(() => !document.getElementById("txModal").classList.contains("open")));
+await fresh.close();
+
+fresh = await ctx.newPage();
+await fresh.goto(BASE + "?go=expense", { waitUntil: "load" });
+check("splash: plays on home-screen shortcut launches too", await splashOn(fresh));
+await waitSplashGone(fresh, 9000);
+check("splash: the shortcut's dialog is open underneath", await fresh.evaluate(() => document.getElementById("txModal").classList.contains("open")));
+check("settings: no animation switch and no keyboard letters", await fresh.evaluate(() =>
+  !document.getElementById("splashSelect") && !document.getElementById("shortcutList") && !document.querySelector("kbd")));
+await fresh.close();
+
 /* ---- 9. Update check & Update now (GitHub Pages lag simulated) ---- */
 deploy("lagging");
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
 await sleep(800);
-check("update: newer version detected", !(await page.isHidden("#updateNowBtn")) && /9\.9\.9/.test(await page.textContent("#updateStatus")));
+check("update: newer version detected", !(await page.isHidden("#updateNowBtn")) && /9\.9\.9/.test(await page.textContent("#updateStatus")),
+      await page.textContent("#updateStatus") + " | " + await toasts(page));
 check("update: release notes shown", /Test notes/.test(await page.textContent("#updateNotes")));
 const rowsBefore = (await state(page)).tx.length;
 await Promise.all([page.waitForURL(/updated=/).catch(() => {}), page.click("#updateNowBtn")]);
@@ -275,18 +370,18 @@ deploy("new");
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
 t = await waitToast(page, /latest version/);
-check("update: up-to-date reported", /latest version \(1\.1\.0\)/.test(t), t);
+check("update: up-to-date reported", new RegExp("latest version \\(" + reEsc(CUR) + "\\)").test(t), t);
 
-/* ---- 10. A real next deploy (1.1.1) picked up by an open app ---- */
+/* ---- 10. A real next deploy (CUR -> NEXT) picked up by an open app ---- */
 deploy("next");
 await page.click("#checkUpdateBtn");
 await sleep(2500);
 check("next deploy: Update now offered", !(await page.isHidden("#updateNowBtn")), await page.textContent("#updateStatus"));
 await Promise.all([page.waitForURL(/updated=|localhost:8765\/$/, { timeout: 10000 }).catch(() => {}), page.click("#updateNowBtn")]);
 await sleep(2500);
-check("next deploy: now running 1.1.1", (await appVersion(page)) === "1.1.1", await appVersion(page));
+check("next deploy: now running " + NEXT, (await appVersion(page)) === NEXT, await appVersion(page));
 t = await waitToast(page, /Running version/);
-check("next deploy: confirms data intact", /Running version 1\.1\.1 — all \d+ transactions are here/.test(t), t);
+check("next deploy: confirms data intact", new RegExp("Running version " + reEsc(NEXT) + " — all \\d+ transactions are here").test(t), t);
 check("next deploy: no data lost", (await state(page)).tx.length === rowsBefore);
 
 /* ---- 11. Offline ---- */
@@ -295,14 +390,14 @@ check("next deploy: no data lost", (await state(page)).tx.length === rowsBefore)
 server.kill();
 await sleep(500);
 await goto(page);
-check("offline: app opens from the offline copy", (await appVersion(page)) === "1.1.1");
+check("offline: app opens from the offline copy", (await appVersion(page)) === NEXT);
 check("offline: data present", (await state(page)).tx.length === rowsBefore);
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
 check("offline: update check fails gracefully", /offline|Couldn't reach/i.test(await waitToast(page, /offline|Couldn't reach/i)));
-server = startServer();
+server = await startServer();
 await sleep(800);
-deploy("new");   // back to the 1.1.0 build for the remaining tests
+deploy("new");   // back to the build under test for the remaining tests
 
 /* ---- 12. Unreadable data is never overwritten ---- */
 await page.evaluate(KEY => localStorage.setItem(KEY, '{"tx":[{"id":"x"'), KEY);

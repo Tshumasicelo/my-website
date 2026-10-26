@@ -35,6 +35,10 @@
 <script async id="chartLib" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"
         integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
 
+<!-- The opening animation plays every time ASPECTS opens, restarts or refreshes.
+     Switched on here, before the body paints, so the app never flashes first. -->
+<script>document.documentElement.classList.add("splash-on");</script>
+
 <style>
 /* ============================================================
    1. DESIGN TOKENS
@@ -207,12 +211,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: background .16s, border-color .16s;
 }
 .kbd-btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
-kbd {
-  font-family: inherit; font-size: 10.5px; font-weight: 600; white-space: nowrap;
-  padding: 2px 5px; border-radius: 5px;
-  background: var(--surface-3); border: 1px solid var(--border);
-  color: var(--faint);
-}
 
 /* --- Tabs --- */
 .tabs {
@@ -252,7 +250,7 @@ kbd {
   padding: 20px;
   box-shadow: var(--shadow);
 }
-.card + .card { margin-top: 16px; }
+.card + .card, .card + .grid, .grid + .card, .grid + .grid { margin-top: 16px; }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-head h3 { font-size: 15px; letter-spacing: -.01em; }
 .card-head .spacer { margin-left: auto; }
@@ -528,7 +526,6 @@ select.input {
   font-size: 13.5px;
 }
 .pal-item .pi-emoji { font-size: 15px; width: 20px; text-align: center; }
-.pal-item .pi-hint { margin-left: auto; }
 .pal-item.active { background: var(--accent-soft); color: var(--accent); }
 .pal-empty { padding: 26px; text-align: center; color: var(--faint); font-size: 13px; }
 
@@ -571,20 +568,185 @@ select.input {
 .danger-zone p { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; }
 
 .hint { font-size: 12px; color: var(--faint); }
-.shortcut-list { display: grid; gap: 7px; }
-.shortcut-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-.shortcut-row kbd { margin-left: auto; }
 
 @media (max-width: 560px) {
   .brand-sub { display: none; }
-  .kbd-btn .kb-label, .kbd-btn kbd { display: none; }
+  .kbd-btn .kb-label { display: none; }
   .kbd-btn { padding: 0 11px; }
   .card { padding: 16px; border-radius: var(--r); }
   .wrap { padding: 16px 12px 90px; }
 }
+/* ============================================================
+   OPENING ANIMATION — torn-paper reveal: "less guessing, more growing".
+   A 4.6 s story told in beats, then the scenes tear apart onto the app:
+     0.0  the two scenes slam in over a paper strip (road ahead / skyline)
+     0.45 the mark pops · 0.8 ASPECTS types out · 0.6 the skyline grows
+     1.5  the trend line climbs to an orange dot that keeps pulsing
+     1.75 "Less guessing," — and orange marker crosses "guessing" out
+     2.75 "more growing." — and a rising arrow is drawn under it
+     3.7  a living hold: slow push-in, city lights, the mark breathes
+     4.6  exit. Motion stays snappy; the extra time goes to the story.
+   It always plays in full: no tap or key skips it.
+   ============================================================ */
+#splash { display: none; }
+.splash-on #splash {
+  --sp-ink: #14151b; --sp-orange: #ff4d1f; --sp-gap: 124px;
+  display: block; position: fixed; inset: 0; z-index: 1000; overflow: hidden;
+  background: #0d0e13;
+  -webkit-tap-highlight-color: transparent;
+}
+/* A 9:16 stage, like a 1080x1920 video frame: full-bleed on phones, a
+   centred portrait card on wide screens instead of cropping the scenes. */
+.sp-stage {
+  position: absolute; top: 0; bottom: 0; left: 0; right: 0; margin: 0 auto;
+  width: min(100%, 56.25vh); overflow: hidden; box-shadow: 0 0 80px rgba(0,0,0,.6);
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.55) 0 1px, transparent 1.5px) 0 0 / 9px 9px,
+    radial-gradient(circle at 70% 60%, rgba(120,80,80,.07) 0 1px, transparent 1.5px) 0 0 / 13px 13px,
+    #f1e5e3;
+}
+.splash-on body { overflow: hidden; }
+
+/* Panels reach 40px past the screen edge so their overshoot never shows paper. */
+.sp-panel { position: absolute; left: 0; right: 0; height: calc(50% - var(--sp-gap) + 40px); box-sizing: border-box; background: #0d0e13; will-change: transform; }
+.sp-top { top: -40px;    animation: spInTop .55s cubic-bezier(.2,.9,.25,1.06) both; }
+.sp-bot { bottom: -40px; animation: spInBot .55s cubic-bezier(.2,.9,.25,1.06) .08s both; }
+.sp-view { position: absolute; left: 0; right: 0; height: calc(100% - 40px); overflow: hidden; }
+.sp-top .sp-view { top: 40px; }
+.sp-bot .sp-view { top: 0; }
+/* The camera slowly pushes in, like footage rather than a still. */
+.sp-scene { display: block; width: 100%; height: 100%; transform-origin: 50% 100%;
+            animation: spPush 5.2s cubic-bezier(.3,.1,.3,1) both; }
+.sp-tear { position: absolute; left: 0; width: 100%; height: 26px; display: block; }
+.sp-top .sp-tear { top: calc(100% - 1px); }
+.sp-bot .sp-tear { bottom: calc(100% - 1px); transform: scaleY(-1); }
+
+.sp-dash { animation: spRoad .6s linear infinite; }
+.sp-lights { animation: spFlicker .32s steps(2) .3s 4 both; }
+.sp-bar { transform-box: fill-box; transform-origin: 50% 100%;
+          animation: spBar .7s cubic-bezier(.2,.9,.3,1.12) both; animation-delay: calc(.6s + var(--i) * 80ms); }
+.sp-bar rect + rect { animation: spWindows .7s ease both; animation-delay: calc(1.7s + var(--i) * 110ms); }
+.sp-trend { fill: none; stroke: #f4f1ea; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
+            stroke-dasharray: 1; stroke-dashoffset: 1; animation: spDraw 1s cubic-bezier(.45,0,.3,1) 1.5s both; }
+.sp-dot { fill: var(--sp-orange); transform-box: fill-box; transform-origin: center;
+          filter: drop-shadow(0 0 6px rgba(255,77,31,.9)); animation: spPop .45s cubic-bezier(.3,1.7,.5,1) 2.45s both; }
+.sp-ring { fill: none; stroke: var(--sp-orange); stroke-width: 2; transform-box: fill-box; transform-origin: center; opacity: 0;
+           animation: spRipple 1.3s ease-out 2.75s infinite; }
+
+.sp-center { position: absolute; left: 16px; right: 16px; top: 50%; transform: translateY(-50%);
+             display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; color: var(--sp-ink); }
+.sp-logo { width: 60px; height: 60px; filter: drop-shadow(0 8px 16px rgba(91,75,255,.35));
+           animation: spPop .65s cubic-bezier(.3,1.6,.5,1) .45s both, spBreathe 1.8s ease-in-out 3.5s infinite; }
+.sp-word { display: flex; font-weight: 800; font-size: 23px; letter-spacing: .3em; margin-right: -.3em; line-height: 1; }
+.sp-word span { display: inline-block; animation: spRise .5s cubic-bezier(.2,.9,.3,1.25) both;
+                animation-delay: calc(.8s + var(--i) * 65ms); }
+.sp-slogan { font-size: 19px; font-weight: 700; line-height: 1.45; letter-spacing: -.01em; }
+.sp-line { display: block; animation: spRise .55s cubic-bezier(.2,.9,.3,1.15) both; }
+.sp-l1 { animation-delay: 1.75s; }
+.sp-l2 { animation-delay: 2.75s; }
+.sp-mark { position: relative; display: inline-block; }
+.sp-mark svg { position: absolute; left: -6%; width: 112%; height: auto; overflow: visible; pointer-events: none; }
+.sp-strike svg { top: 50%; transform: translateY(-45%); }
+.sp-grow svg { top: 80%; }
+.sp-draw { fill: none; stroke: var(--sp-orange); stroke-linecap: round; stroke-linejoin: round;
+           stroke-dasharray: 1; stroke-dashoffset: 1; animation: spDraw .4s ease-out both; }
+.sp-mark .sp-draw { stroke-width: 2.4; }
+.sp-strike .sp-draw { stroke-width: 3.2; }
+.sp-strike .sp-draw:nth-child(1) { animation-delay: 2.25s; }
+.sp-strike .sp-draw:nth-child(2) { animation-delay: 2.45s; }
+.sp-grow .sp-draw:nth-child(1) { animation-delay: 3.2s; animation-duration: .5s; }
+.sp-grow .sp-draw:nth-child(2) { animation-delay: 3.65s; animation-duration: .3s; }
+.sp-scrib { position: absolute; width: 128px; height: auto; overflow: visible; pointer-events: none; }
+.sp-scrib .sp-draw { stroke-width: 6.5; animation-duration: .7s; }
+.sp-scrib-a { top: 4px; right: -10px; }
+.sp-scrib-b { bottom: 6px; left: -10px; transform: rotate(180deg); }
+.sp-scrib-a .sp-draw { animation-delay: 1.1s; }
+.sp-scrib-b .sp-draw { animation-delay: 1.35s; }
+
+/* Exit: the scenes tear apart, the paper lifts, the app is already there. */
+#splash.sp-out { animation: spFade .4s ease .2s both; }
+#splash.sp-out .sp-top { animation: spOutTop .6s cubic-bezier(.6,0,.75,.35) both; }
+#splash.sp-out .sp-bot { animation: spOutBot .6s cubic-bezier(.6,0,.75,.35) both; }
+#splash.sp-out .sp-center { animation: spLift .45s ease both; }
+#splash.sp-out .sp-scrib { animation: spFade .3s ease both; }
+
+@keyframes spInTop   { from { transform: translateY(calc(-100% - 30px)); } to { transform: none; } }
+@keyframes spInBot   { from { transform: translateY(calc(100% + 30px)); } to { transform: none; } }
+@keyframes spOutTop  { to { transform: translateY(calc(-100% - 30px)); } }
+@keyframes spOutBot  { to { transform: translateY(calc(100% + 30px)); } }
+@keyframes spPush    { from { transform: scale(1); } to { transform: scale(1.1); } }
+@keyframes spRoad    { to { stroke-dashoffset: -18; } }
+@keyframes spFlicker { from { opacity: .3; } to { opacity: 1; } }
+@keyframes spBar     { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes spWindows { from { opacity: .15; } to { opacity: 1; } }
+@keyframes spDraw    { to { stroke-dashoffset: 0; } }
+@keyframes spPop     { from { transform: scale(.3) rotate(-14deg); opacity: 0; } 60% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes spBreathe { 50% { transform: scale(1.06); } }
+@keyframes spRipple  { from { transform: scale(1); opacity: .8; } to { transform: scale(3.4); opacity: 0; } }
+@keyframes spRise    { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes spLift    { to { transform: translateY(-50%) scale(1.06); opacity: 0; } }
+@keyframes spFade    { to { opacity: 0; } }
+
+/* Reduced motion: no movement — the finished frame, held for the same time, then a cut. */
+@media (prefers-reduced-motion: reduce) {
+  #splash, #splash * { animation-delay: 0s !important; }
+  .sp-dash, .sp-lights, .sp-ring, .sp-scene { animation: none !important; }
+  .sp-logo { animation: spPop .001ms both !important; }
+}
 </style>
 </head>
 <body>
+<!-- Opening animation (decorative; the app boots underneath it). -->
+<div id="splash" aria-hidden="true"><div class="sp-stage">
+  <div class="sp-panel sp-top"><div class="sp-view"><svg class="sp-scene" viewBox="0 0 360 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+<defs><radialGradient id="spGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+<rect width="360" height="300" fill="#121318"/>
+<path fill="#1b1d23" d="M0 0H360L205 135H155Z"/>
+<path fill="#23262d" d="M0 0L155 135V165L0 300Z"/>
+<path fill="#1f2228" d="M360 0L205 135V165L360 300Z"/>
+<path fill="#2e3138" d="M155 165H205L360 300H0Z"/>
+<rect x="155" y="135" width="50" height="30" fill="#3a3d45"/>
+<circle cx="180" cy="150" r="90" fill="url(#spGlow)"/>
+<g stroke="#3b3f48" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M22 120c8-10 14 4 22-6s10 6 18-4"/><path d="M30 160c6 8 12-6 20 2s8-4 16 3"/><path d="M300 110c-8-9-13 5-21-4s-9 7-17-2"/><path d="M318 170c-6 7-12-5-19 2"/></g>
+<g class="sp-lights" stroke="#f4f1ea" stroke-width="3.2" stroke-linecap="round"><path d="M19 16l13.6 11.8"/><path d="M341 16l-13.6 11.8"/><path d="M46 40l11.4 9.9"/><path d="M314 40l-11.4 9.9"/><path d="M73 63l9.4 8.1"/><path d="M287 63l-9.4 8.1"/><path d="M96 84l7.6 6.6"/><path d="M264 84l-7.6 6.6"/><path d="M115 100l6.1 5.3"/><path d="M245 100l-6.1 5.3"/></g>
+<g stroke="#8a8f99" stroke-width="1.6"><path d="M168 166L48 300"/><path d="M192 166L312 300"/></g>
+<path class="sp-dash" d="M180 166V300" stroke="#d9dce2" stroke-width="3" stroke-dasharray="7 11"/>
+<g stroke="#e1e3e8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M120 288V254M108 266l12-13 12 13"/><path d="M240 288V254M228 266l12-13 12 13"/></g>
+</svg></div><svg class="sp-tear" viewBox="0 0 1000 30" preserveAspectRatio="none"><path fill="#fbf8f6" d="M0 0H1000V17.2L989 22.4L979 20.6L965 12.9L950 12.6L935 13.1L925 18.8L905 14.0L893 22.0L872 21.2L858 27.6L848 25.7L835 14.3L825 16.9L805 14.9L789 22.2L775 20.8L765 13.0L753 22.9L739 17.0L722 19.3L709 24.7L691 15.9L675 20.4L654 23.7L642 27.7L631 18.7L612 14.4L597 12.6L579 24.2L563 26.0L550 23.1L533 21.3L518 25.4L497 19.6L479 13.0L461 22.4L439 25.2L426 18.2L409 12.4L394 14.7L383 12.9L364 14.1L352 18.3L332 13.3L317 20.8L296 25.1L276 16.5L262 17.7L241 27.3L230 14.8L218 15.7L203 21.4L191 12.1L176 17.9L160 27.2L142 20.2L125 22.8L115 26.4L96 26.0L76 18.3L62 13.7L45 13.0L35 15.3L24 17.4L14 12.0L3 13.6L0 12.4Z"/><path fill="#0d0e13" d="M0 0H1000V13.5L983 4.8L971 7.2L957 4.5L937 14.9L922 8.8L912 4.2L898 6.2L879 4.9L869 14.4L853 4.8L837 3.3L821 14.7L801 11.4L789 7.4L778 12.3L762 12.3L748 5.7L729 14.8L709 12.7L689 11.9L677 9.2L664 3.3L654 6.4L642 11.3L620 8.4L599 14.9L578 7.4L566 5.7L554 5.5L537 13.8L517 8.8L500 12.6L490 10.9L469 12.4L450 8.7L439 12.5L426 12.6L404 7.8L390 14.4L371 5.0L361 4.8L340 12.7L329 12.9L307 10.9L294 9.6L283 3.2L261 10.8L246 14.2L231 13.5L211 5.5L199 6.5L187 10.0L174 8.0L164 13.9L150 8.5L133 13.9L119 14.0L104 9.4L88 3.2L73 5.2L64 12.6L53 8.7L34 9.7L21 9.2L5 12.4L0 9.7Z"/></svg></div>
+  <div class="sp-panel sp-bot"><div class="sp-view"><svg class="sp-scene" viewBox="0 0 360 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+<defs><linearGradient id="spSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1d24"/><stop offset="1" stop-color="#0d0e13"/></linearGradient>
+<pattern id="spWin" width="7" height="9" patternUnits="userSpaceOnUse"><rect x="2" y="3" width="2.4" height="3" fill="#e9e6df" opacity=".28"/></pattern></defs>
+<rect width="360" height="300" fill="url(#spSky)"/>
+<g stroke="#fff" stroke-opacity=".06"><path d="M0 60H360M0 120H360M0 180H360M0 240H360"/></g>
+<g class="sp-bar" style="--i:0"><rect x="6" y="254" width="26" height="46" fill="#24272f"/><rect x="6" y="254" width="26" height="46" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:1"><rect x="36" y="239" width="28" height="61" fill="#2b2f38"/><rect x="36" y="239" width="28" height="61" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:2"><rect x="68" y="242" width="26" height="58" fill="#272a32"/><rect x="68" y="242" width="26" height="58" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:3"><rect x="98" y="217" width="28" height="83" fill="#30343d"/><rect x="98" y="217" width="28" height="83" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:4"><rect x="130" y="222" width="26" height="78" fill="#2a2d35"/><rect x="130" y="222" width="26" height="78" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:5"><rect x="160" y="200" width="26" height="100" fill="#24272f"/><rect x="160" y="200" width="26" height="100" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:6"><rect x="190" y="208" width="28" height="92" fill="#2b2f38"/><rect x="190" y="208" width="28" height="92" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:7"><rect x="222" y="182" width="30" height="118" fill="#272a32"/><rect x="222" y="182" width="30" height="118" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:8"><rect x="256" y="195" width="30" height="105" fill="#30343d"/><rect x="256" y="195" width="30" height="105" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:9"><rect x="290" y="167" width="30" height="133" fill="#2a2d35"/><rect x="290" y="167" width="30" height="133" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:10"><rect x="324" y="145" width="28" height="155" fill="#24272f"/><rect x="324" y="145" width="28" height="155" fill="url(#spWin)"/></g>
+<path class="sp-trend" pathLength="1" d="M19 240 L50 225 L81 228 L112 203 L143 208 L173 186 L204 194 L237 168 L271 181 L305 153 L338 131"/>
+<circle class="sp-ring" cx="338" cy="131" r="6"/><circle class="sp-dot" cx="338" cy="131" r="6"/>
+</svg></div><svg class="sp-tear" viewBox="0 0 1000 30" preserveAspectRatio="none"><path fill="#fbf8f6" d="M0 0H1000V17.2L989 22.4L979 20.6L965 12.9L950 12.6L935 13.1L925 18.8L905 14.0L893 22.0L872 21.2L858 27.6L848 25.7L835 14.3L825 16.9L805 14.9L789 22.2L775 20.8L765 13.0L753 22.9L739 17.0L722 19.3L709 24.7L691 15.9L675 20.4L654 23.7L642 27.7L631 18.7L612 14.4L597 12.6L579 24.2L563 26.0L550 23.1L533 21.3L518 25.4L497 19.6L479 13.0L461 22.4L439 25.2L426 18.2L409 12.4L394 14.7L383 12.9L364 14.1L352 18.3L332 13.3L317 20.8L296 25.1L276 16.5L262 17.7L241 27.3L230 14.8L218 15.7L203 21.4L191 12.1L176 17.9L160 27.2L142 20.2L125 22.8L115 26.4L96 26.0L76 18.3L62 13.7L45 13.0L35 15.3L24 17.4L14 12.0L3 13.6L0 12.4Z"/><path fill="#0d0e13" d="M0 0H1000V13.5L983 4.8L971 7.2L957 4.5L937 14.9L922 8.8L912 4.2L898 6.2L879 4.9L869 14.4L853 4.8L837 3.3L821 14.7L801 11.4L789 7.4L778 12.3L762 12.3L748 5.7L729 14.8L709 12.7L689 11.9L677 9.2L664 3.3L654 6.4L642 11.3L620 8.4L599 14.9L578 7.4L566 5.7L554 5.5L537 13.8L517 8.8L500 12.6L490 10.9L469 12.4L450 8.7L439 12.5L426 12.6L404 7.8L390 14.4L371 5.0L361 4.8L340 12.7L329 12.9L307 10.9L294 9.6L283 3.2L261 10.8L246 14.2L231 13.5L211 5.5L199 6.5L187 10.0L174 8.0L164 13.9L150 8.5L133 13.9L119 14.0L104 9.4L88 3.2L73 5.2L64 12.6L53 8.7L34 9.7L21 9.2L5 12.4L0 9.7Z"/></svg></div>
+  <svg class="sp-scrib sp-scrib-a" viewBox="0 0 128 92" aria-hidden="true"><path class="sp-draw" pathLength="1" d="M8 10L120 4L14 30L122 24L22 52L124 44L34 74L118 68"/></svg>
+  <svg class="sp-scrib sp-scrib-b" viewBox="0 0 128 92" aria-hidden="true"><path class="sp-draw" pathLength="1" d="M8 10L120 4L14 30L122 24L22 52L124 44L34 74L118 68"/></svg>
+  <div class="sp-center">
+    <svg class="sp-logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="spMark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b6bff"/><stop offset=".55" stop-color="#5b4bff"/><stop offset="1" stop-color="#00c2a8"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#spMark)"/><path d="M140 388L256 130L372 388" fill="none" stroke="#fff" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/><path d="M187 305H325" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+    <div class="sp-word"><span style="--i:0">A</span><span style="--i:1">S</span><span style="--i:2">P</span><span style="--i:3">E</span><span style="--i:4">C</span><span style="--i:5">T</span><span style="--i:6">S</span></div>
+    <div class="sp-slogan">
+      <span class="sp-line sp-l1">Less <span class="sp-mark sp-strike">guessing<svg viewBox="0 0 100 14"><path class="sp-draw" pathLength="1" d="M2 9C20 4 34 12 50 7S80 11 98 5"/><path class="sp-draw" pathLength="1" d="M4 11C30 6 60 13 96 8"/></svg></span>,</span>
+      <span class="sp-line sp-l2">more <span class="sp-mark sp-grow">growing<svg viewBox="0 0 100 26"><path class="sp-draw" pathLength="1" d="M2 18C30 24 62 20 90 6"/><path class="sp-draw" pathLength="1" d="M80 4L91 5L88 16"/></svg></span>.</span>
+    </div>
+  </div>
+</div></div>
+<script>
+/* Plays the opening animation in full, every time: nothing skips it. */
+(function () {
+  var root = document.documentElement, el = document.getElementById("splash");
+  if (!el) return;
+  var SHOW_MS = 4600, EXIT_MS = 640;
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  setTimeout(function () {
+    el.classList.add("sp-out");
+    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : EXIT_MS);
+  }, SHOW_MS);
+})();
+</script>
 
 <canvas id="confetti" aria-hidden="true"></canvas>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
@@ -605,7 +767,7 @@ select.input {
     <span class="chip flame" id="streakChip" title="Daily task streak">🔥 <span id="streakNum">0</span></span>
     <span class="chip level" id="levelChip" title="Experience level">Lv <span id="levelNum">1</span></span>
     <button class="kbd-btn" id="paletteBtn" aria-label="Open command palette">
-      <span aria-hidden="true">⌘</span><span class="kb-label">Search</span><kbd id="palKbd">Ctrl K</kbd>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span class="kb-label">Search</span>
     </button>
     <button class="icon-btn" id="themeBtn" aria-label="Toggle colour theme">🌙</button>
   </div>
@@ -769,15 +931,21 @@ select.input {
 
 <!-- ============================ SETTINGS ============================ -->
 <section class="view" id="view-settings" role="tabpanel" hidden>
+  <div class="card">
+    <div class="card-head"><h3>Reports</h3></div>
+    <p class="hint" style="margin-bottom:12px;">A clean PDF of your money in and out — ready to keep, print or share.</p>
+    <div class="row row-wrap" style="gap:9px;">
+      <select class="input" id="reportPeriod" style="flex:1; min-width:160px;" aria-label="Report period"></select>
+      <button class="btn btn-primary" id="reportBtn">📄 Download PDF</button>
+    </div>
+  </div>
+
   <div class="grid grid-2">
     <div class="card">
       <div class="card-head"><h3>Backup</h3></div>
-      <p class="hint" style="margin-bottom:14px;">Your data lives only in this browser and is never uploaded — anyone using this browser profile can see it. Export regularly: clearing site data erases everything.</p>
-      <div class="row" style="gap:9px;">
-        <button class="btn btn-primary btn-block" id="exportBtn">⬇ Export JSON</button>
-        <button class="btn btn-ghost btn-block" id="importBtn">⬆ Import</button>
-      </div>
-      <button class="btn btn-ghost btn-block" id="csvBtn" style="margin-top:9px;">⬇ Transactions as CSV</button>
+      <p class="hint" style="margin-bottom:14px;">Your records are kept on this device only and are never uploaded. Now and then, save a backup: it's a file that gets everything back if you change phones or clear your browser.</p>
+      <button class="btn btn-primary btn-block" id="exportBtn">💾 Save a backup</button>
+      <button class="btn btn-ghost btn-block" id="importBtn" style="margin-top:9px;">♻️ Restore from a backup</button>
       <input type="file" id="importFile" accept="application/json,.json" class="sr-only" aria-label="Choose a backup file">
       <p class="hint" id="storageInfo" style="margin-top:12px;"></p>
       <p class="hint" id="storageHealth" style="margin-top:6px;"></p>
@@ -794,8 +962,6 @@ select.input {
           <option value="system">Match system</option>
         </select>
       </div>
-      <div class="card-head" style="margin:20px 0 10px;"><h3>Keyboard</h3></div>
-      <div class="shortcut-list" id="shortcutList"></div>
     </div>
   </div>
 
@@ -820,7 +986,7 @@ select.input {
     <div class="card-head"><h3>Danger zone</h3></div>
     <div class="danger-zone">
       <h4>Erase everything ☢️</h4>
-      <p>Deletes every transaction, task, goal, budget and streak. This cannot be undone — export a backup first.</p>
+      <p>Deletes every transaction, task, goal, budget and streak. This cannot be undone — save a backup first.</p>
       <button class="btn btn-danger" id="nukeBtn">Erase all data</button>
     </div>
   </div>
@@ -1051,7 +1217,7 @@ const LEGACY_KEYS = ["aspects_balance", "aspects_history", "aspects_logs", "aspe
 
 /* Keep in step with version.json and CACHE_VERSION in sw.js
    (scripts/check-web-app.mjs fails the build when they differ). */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 
 const CATS = [
   { k: "General",   e: "📦", c: "#8b93a7" },
@@ -1869,18 +2035,17 @@ function goalETA(g, saved, complete) {
 function renderSettings() {
   $("#themeSelect").value = S.theme || "dark";
   try {
-    const bytes = new Blob([JSON.stringify(S)]).size;
-    $("#storageInfo").textContent = S.tx.length + " transactions · " + S.tasks.length + " tasks · " +
-      S.goals.length + " goals · " + (bytes / 1024).toFixed(1) + " KB stored" +
+    const n = (k, word) => k + " " + word + (k === 1 ? "" : "s");
+    $("#storageInfo").textContent = n(S.tx.length, "transaction") + " · " + n(S.tasks.length, "task") + " · " +
+      n(S.goals.length, "goal") +
       (S.invalidTx.length ? " · " + S.invalidTx.length + " unreadable rows kept aside" : "") +
-      " · last backup " + (S.lastBackup ? relDay(S.lastBackup) : "never");
+      " · last backup: " + (S.lastBackup ? relDay(S.lastBackup) : "never");
   } catch (_) { $("#storageInfo").textContent = ""; }
 
+  renderReportPeriods();
   renderStorageHealth();
   renderInstall();
   renderUpdate();
-  $("#shortcutList").innerHTML = SHORTCUT_HELP
-    .map(s => '<div class="shortcut-row"><span>' + esc(s[1]) + "</span><kbd>" + esc(s[0]) + "</kbd></div>").join("");
 }
 
 /* ============================================================
@@ -2055,9 +2220,9 @@ function renderStorageHealth() {
   $("#rescueBtn").hidden = !(storageIssue && storageIssue.raw);
   if (storageIssue) { el.textContent = "⚠️ " + storageIssue.message; return; }
   el.textContent = persisted === true
-    ? "🔒 This browser has agreed to keep your data even when the device is low on space."
+    ? "🔒 This device has agreed to keep your records safe, even when storage runs low."
     : persisted === false
-      ? "The browser may clear this data if the device runs low on space — and Safari can after 7 days without a visit unless ASPECTS is on the Home Screen. Installing the app and exporting backups protect it."
+      ? "If this device runs very low on storage it may delete these records — and Safari does after 7 days unused, unless ASPECTS is on your Home Screen. Saving a backup keeps them safe."
       : "";
 }
 
@@ -2465,6 +2630,302 @@ function applyTheme(pref) {
 }
 
 /* ============================================================
+   PDF REPORT — a money statement for a week, a month or all time,
+   written as a real PDF by hand: no library, works offline, and
+   nothing leaves the device. It uses the built-in PDF Helvetica
+   fonts, so there is nothing to embed; text is WinAnsi-encoded.
+   ============================================================ */
+const PDF_W = 595.28, PDF_H = 841.89, PDF_M = 40;   // A4 in points, side margin
+
+/* Advance widths (per 1000 em) for ASCII 32–126, from Adobe's Helvetica AFM files —
+   needed to right-align amounts and to shorten long notes. */
+const HELV_W = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const HELV_BW = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+/* Typographic characters outside Latin-1 that WinAnsi still has, with their widths. */
+const WIN_ANSI = { "€": [128, 556], "…": [133, 1000], "‘": [145, 222], "’": [146, 222], "“": [147, 333], "”": [148, 333],
+                   "•": [149, 350], "–": [150, 556], "—": [151, 1000] };
+
+const pdfNum = n => String(Math.round(n * 100) / 100);
+
+/* Emoji and pictographs have no glyph in the PDF fonts: drop them, and the double space they leave. */
+function pdfClean(s) {
+  return String(s).replace(/[\u2190-\u2BFF\u200D\uFE0F]|[\u{1F000}-\u{1FFFF}]/gu, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function pdfStr(s) {
+  let out = "";
+  for (const ch of pdfClean(s)) {
+    let c = ch.codePointAt(0);
+    if (WIN_ANSI[ch]) c = WIN_ANSI[ch][0];
+    else if (c > 255 || c < 32 || (c >= 127 && c < 160)) c = 63;          // no glyph: "?"
+    if (c === 40 || c === 41 || c === 92) out += "\\" + String.fromCharCode(c);
+    else if (c < 127) out += String.fromCharCode(c);
+    else out += "\\" + c.toString(8).padStart(3, "0");                   // keeps the file pure ASCII
+  }
+  return "(" + out + ")";
+}
+
+function pdfWidth(s, size, bold) {
+  const table = bold ? HELV_BW : HELV_W;
+  let w = 0;
+  for (const ch of pdfClean(s)) {
+    const c = ch.codePointAt(0);
+    w += c >= 32 && c <= 126 ? table[c - 32] : WIN_ANSI[ch] ? WIN_ANSI[ch][1] : 556;
+  }
+  return w * size / 1000;
+}
+
+function pdfFit(s, size, bold, max) {
+  s = pdfClean(s);
+  if (pdfWidth(s, size, bold) <= max) return s;
+  while (s.length && pdfWidth(s + "…", size, bold) > max) s = s.slice(0, -1);
+  return s.trimEnd() + "…";
+}
+
+function pdfWrap(s, size, bold, max) {
+  const lines = [];
+  let cur = "";
+  String(s).split(" ").forEach(word => {
+    const next = cur ? cur + " " + word : word;
+    if (cur && pdfWidth(next, size, bold) > max) { lines.push(cur); cur = word; } else cur = next;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/* One page of drawing operations. Coordinates are from the top-left in points;
+   y is a text baseline or a box's top edge. */
+function pdfPage() {
+  const ops = [];
+  const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255].map(v => pdfNum(v / 255)).join(" "); };
+  return {
+    ops,
+    rect(x, y, w, h, fill) { ops.push(rgb(fill) + " rg " + [x, PDF_H - y - h, w, h].map(pdfNum).join(" ") + " re f"); },
+    roundRect(x, y, w, h, r, fill) {             // four Bezier quarter-circles
+      const k = r * .5523, t = PDF_H - y, b = t - h, P = (...n) => n.map(pdfNum).join(" ");
+      ops.push(rgb(fill) + " rg " + P(x + r, t) + " m " + P(x + w - r, t) + " l " + P(x + w - r + k, t, x + w, t - r + k, x + w, t - r) + " c " +
+               P(x + w, b + r) + " l " + P(x + w, b + r - k, x + w - r + k, b, x + w - r, b) + " c " + P(x + r, b) + " l " +
+               P(x + r - k, b, x, b + r - k, x, b + r) + " c " + P(x, t - r) + " l " + P(x, t - r + k, x + r - k, t, x + r, t) + " c f");
+    },
+    line(x1, y1, x2, y2, stroke, width = .6) {
+      ops.push(rgb(stroke) + " RG " + width + " w " + pdfNum(x1) + " " + pdfNum(PDF_H - y1) + " m " + pdfNum(x2) + " " + pdfNum(PDF_H - y2) + " l S");
+    },
+    text(x, y, s, size, o = {}) {
+      const w = pdfWidth(s, size, o.bold);
+      const tx = o.align === "right" ? x - w : o.align === "center" ? x - w / 2 : x;
+      ops.push("BT /" + (o.bold ? "F2" : "F1") + " " + size + " Tf " + rgb(o.color || "#14151b") + " rg " +
+               pdfNum(tx) + " " + pdfNum(PDF_H - y) + " Td " + pdfStr(s) + " Tj ET");
+    }
+  };
+}
+
+/* Pages -> a complete PDF file as a string. Everything is ASCII, so string
+   length equals byte length, which keeps the cross-reference offsets exact. */
+function pdfBuild(pages, title) {
+  const objs = [null, null,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"];
+  const kids = [];
+  pages.forEach(p => {
+    const content = p.ops.join("\n");
+    objs.push("<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream");
+    objs.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + PDF_W + " " + PDF_H + "] " +
+              "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + (objs.length) + " 0 R >>");
+    kids.push(objs.length + " 0 R");
+  });
+  objs[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objs[1] = "<< /Type /Pages /Kids [" + kids.join(" ") + "] /Count " + kids.length + " >>";
+  // Document properties use PDFDocEncoding, where WinAnsi's dashes mean other letters.
+  objs.push("<< /Title " + pdfStr(title.replace(/[–—]/g, "-")) + " /Producer (ASPECTS) >>");
+
+  let out = "%PDF-1.4\n";
+  const offsets = objs.map((o, i) => { const at = out.length; out += (i + 1) + " 0 obj\n" + o + "\nendobj\n"; return at; });
+  const xref = out.length;
+  out += "xref\n0 " + (objs.length + 1) + "\n0000000000 65535 f \n" +
+         offsets.map(o => String(o).padStart(10, "0") + " 00000 n \n").join("") +
+         "trailer\n<< /Size " + (objs.length + 1) + " /Root 1 0 R /Info " + objs.length + " 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+  return out;
+}
+
+/* The periods a report can cover. Weeks run Monday to Sunday. */
+function reportPeriods() {
+  const now = new Date();
+  const day = (d, n = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  const monday = day(now, -((now.getDay() + 6) % 7));
+  const month = ym => { const [y, m] = ym.split("-").map(Number); return [new Date(y, m - 1, 1), new Date(y, m, 1)]; };
+  const list = [
+    { id: "w0", label: "This week",  range: [monday, day(monday, 7)] },
+    { id: "w1", label: "Last week",  range: [day(monday, -7), monday] },
+    { id: "m0", label: "This month", ym: thisYM() },
+    { id: "m1", label: "Last month", ym: prevYM(thisYM()) }
+  ];
+  monthsPresent().filter(ym => ym !== thisYM() && ym !== prevYM(thisYM()))
+    .forEach(ym => list.push({ id: "m:" + ym, label: ymLabel(ym), ym }));
+  list.push({ id: "all", label: "All time", range: [new Date(0), new Date(8.64e15)] });
+  list.forEach(p => { if (p.ym) p.range = month(p.ym); });
+  return list;
+}
+
+function reportTitle(p) {
+  if (p.id === "all") return "All time";
+  if (p.ym) return p.range[0].toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const last = new Date(p.range[1].getFullYear(), p.range[1].getMonth(), p.range[1].getDate() - 1);
+  return p.range[0].toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " – " +
+         last.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function buildReport(p, rows) {
+  const INK = "#14151b", MUTED = "#6b7180", POS = "#0a8f4d", NEG = "#d81b45", ACCENT = "#5b4bff",
+        ORANGE = "#ff4d1f", SOFT = "#f3f1f7", STRIPE = "#faf9fc", LINE = "#e3e0ea";
+  const X0 = PDF_M, X1 = PDF_W - PDF_M, CW = X1 - X0, BOTTOM = PDF_H - 64;
+  const sum = type => rows.filter(t => t.type === type).reduce((a, t) => a + t.amount, 0);
+  const income = sum("income"), expense = sum("expense"), saved = sum("goal");
+  const left = income - expense - saved;
+  const byCat = {};
+  rows.filter(t => t.type === "expense").forEach(t => { const k = catOf(t.category).k; byCat[k] = (byCat[k] || 0) + t.amount; });
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const title = reportTitle(p);
+  const made = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  const pages = [];
+  let pg, y, tableOn = false;
+
+  function newPage() {
+    pg = pdfPage();
+    pages.push(pg);
+    if (pages.length === 1) {
+      pg.rect(0, 0, PDF_W, 104, INK);                 // the opening animation's ink, paper and orange
+      pg.rect(0, 104, PDF_W, 4, ORANGE);
+      pg.roundRect(X0, 32, 40, 40, 9, ACCENT);
+      pg.text(X0 + 20, 60.5, "A", 24, { bold: true, color: "#ffffff", align: "center" });
+      pg.text(X0 + 54, 50, "ASPECTS", 18, { bold: true, color: "#ffffff" });
+      pg.text(X0 + 54, 67, "Money report", 10.5, { color: "#c9cbd3" });
+      pg.text(X1, 50, title, 15, { bold: true, color: "#ffffff", align: "right" });
+      pg.text(X1, 67, "Made on " + made, 9, { color: "#c9cbd3", align: "right" });
+      y = 138;
+    } else {
+      pg.text(X0, 42, "ASPECTS  ·  " + title, 9.5, { bold: true, color: MUTED });
+      pg.text(X1, 42, "continued", 9, { color: MUTED, align: "right" });
+      pg.line(X0, 52, X1, 52, LINE);
+      y = 72;
+      if (tableOn) tableHead();
+    }
+  }
+  const room = h => { if (y + h > BOTTOM) newPage(); };
+  function section(name) {
+    room(56);
+    y += 14;
+    pg.text(X0, y + 12, name, 12.5, { bold: true });
+    y += 26;
+  }
+
+  // Columns: date | description | category | amount
+  const C_DESC = X0 + 74, C_CAT = X1 - 190, W_DESC = C_CAT - C_DESC - 12, W_CAT = 90;
+  function tableHead() {
+    pg.rect(X0, y, CW, 20, SOFT);
+    [["DATE", X0 + 8], ["DESCRIPTION", C_DESC], ["CATEGORY", C_CAT]].forEach(([h, x]) =>
+      pg.text(x, y + 13.5, h, 7.5, { bold: true, color: MUTED }));
+    pg.text(X1 - 8, y + 13.5, "AMOUNT", 7.5, { bold: true, color: MUTED, align: "right" });
+    y += 20;
+  }
+
+  newPage();
+
+  // Four headline numbers.
+  const tiles = [["Money in", income, POS], ["Money out", expense, NEG], ["Into savings goals", saved, ACCENT],
+                 ["What's left", left, left >= 0 ? POS : NEG]];
+  const tw = (CW - 30) / 4;
+  tiles.forEach(([label, v, c], i) => {
+    const x = X0 + i * (tw + 10), s = money(v);
+    const size = Math.min(15, (tw - 24) * 1000 / (pdfWidth(s, 1000, true) || 1));
+    pg.rect(x, y, tw, 60, SOFT);
+    pg.rect(x, y, 3, 60, c);
+    pg.text(x + 13, y + 21, label, 8.5, { color: MUTED });
+    pg.text(x + 13, y + 45, s, size, { bold: true, color: c });
+  });
+  y += 60 + 26;
+
+  // The same story in one plain sentence.
+  const savedPart = saved ? " and put " + money(saved) + " into savings goals" : "";
+  const story = left >= 0
+    ? "You spent " + money(expense) + savedPart + " out of the " + money(income) + " that came in, leaving " + money(left) + "."
+    : "You spent " + money(expense) + savedPart + ": " + money(-left) + " more than the " + money(income) + " that came in.";
+  pdfWrap(story, 11, false, CW).forEach(line => { pg.text(X0, y, line, 11, { color: INK }); y += 16; });
+
+  section("Where the money went");
+  if (!cats.length) {
+    pg.text(X0, y + 10, "No spending recorded in this period.", 10, { color: MUTED });
+    y += 24;
+  }
+  const BAR_X = X0 + 104, BAR_W = CW - 104 - 128;
+  cats.forEach(([k, v]) => {
+    room(24);
+    pg.text(X0, y + 11, k, 10);
+    pg.rect(BAR_X, y + 2, BAR_W, 11, SOFT);
+    pg.rect(BAR_X, y + 2, Math.max(2, BAR_W * v / cats[0][1]), 11, catOf(k).c);
+    pg.text(X1 - 44, y + 11, money(v), 10, { bold: true, align: "right" });
+    pg.text(X1, y + 11, Math.round(v / expense * 100) + "%", 9.5, { color: MUTED, align: "right" });
+    y += 22;
+  });
+
+  section("Every transaction");
+  tableHead();
+  tableOn = true;
+  rows.slice().reverse().forEach((t, i) => {             // newest first, like the app
+    room(19);
+    if (i % 2) pg.rect(X0, y, CW, 19, STRIPE);
+    const goal = t.goalId ? S.goals.find(g => g.id === t.goalId) : null;
+    const isGoal = t.type === "goal";
+    const what = t.note || (isGoal ? "Into " + (goal ? goal.name : "a savings goal") : t.type === "income" ? "Income" : catOf(t.category).k);
+    const kind = isGoal ? "Savings goal" : t.type === "income" ? "Income" : catOf(t.category).k;
+    const date = new Date(t.ts).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    pg.text(X0 + 8, y + 12.8, date, 9, { color: MUTED });
+    pg.text(C_DESC, y + 12.8, pdfFit(what, 9.5, false, W_DESC), 9.5);
+    pg.text(C_CAT, y + 12.8, pdfFit(kind, 9, false, W_CAT), 9, { color: MUTED });
+    pg.text(X1 - 8, y + 12.8, (t.type === "income" ? "+" : "-") + money(t.amount), 9.5,
+            { bold: true, color: t.type === "income" ? POS : isGoal ? ACCENT : NEG, align: "right" });
+    y += 19;
+  });
+  tableOn = false;
+  room(30);
+  pg.line(X0, y + 6, X1, y + 6, LINE);
+  pg.text(X0 + 8, y + 22, rows.length + (rows.length === 1 ? " transaction" : " transactions"), 9, { color: MUTED });
+  pg.text(X1 - 8, y + 22, "Net " + money(left), 10, { bold: true, color: left >= 0 ? POS : NEG, align: "right" });
+
+  pages.forEach((page, i) => {
+    page.line(X0, PDF_H - 44, X1, PDF_H - 44, LINE);
+    page.text(X0, PDF_H - 28, "ASPECTS  ·  Less guessing, more growing.", 8.5, { color: MUTED });
+    page.text(X1, PDF_H - 28, "Page " + (i + 1) + " of " + pages.length, 8.5, { color: MUTED, align: "right" });
+  });
+  return pdfBuild(pages, "ASPECTS money report: " + title);
+}
+
+function downloadReport() {
+  const periods = reportPeriods();
+  const p = periods.find(x => x.id === $("#reportPeriod").value) || periods[2];
+  const [from, to] = p.range;
+  const rows = txSorted().filter(t => { const d = new Date(t.ts); return d >= from && d < to; });
+  if (!rows.length) { toast("Nothing recorded for " + p.label.toLowerCase() + " yet", "info", "📄"); return; }
+  try {
+    const slug = p.id === "all" ? "all-time-" + todayKey() : p.ym ? p.ym : "week-" + dayKey(from);
+    downloadFile("aspects-report-" + slug + ".pdf", buildReport(p, rows), "application/pdf");
+    toast("PDF report saved — it's in your Downloads", "good", "📄");
+  } catch (err) {
+    console.error(err);
+    toast("Could not make the report", "bad", "⚠️");
+  }
+}
+
+function renderReportPeriods() {
+  const sel = $("#reportPeriod");
+  if (!sel) return;
+  const keep = sel.value || "m0";
+  const periods = reportPeriods();
+  sel.innerHTML = periods.map(p => '<option value="' + esc(p.id) + '">' + esc(p.label) + "</option>").join("");
+  sel.value = periods.some(p => p.id === keep) ? keep : "m0";
+}
+
+/* ============================================================
    BACKUP — export / import
    ============================================================ */
 function downloadFile(name, text, type) {
@@ -2484,7 +2945,7 @@ function exportData(prefix = "aspects-backup-") {
     downloadFile(prefix + todayKey() + ".json", JSON.stringify(S, null, 2), "application/json");
     save();
     renderSettings();
-    toast("Backup downloaded", "good", "💾");
+    toast("Backup saved — it's in your Downloads", "good", "💾");
     return true;
   } catch (err) {
     console.error(err);
@@ -2493,38 +2954,12 @@ function exportData(prefix = "aspects-backup-") {
   }
 }
 
-/* For spreadsheets, not for restoring — only the JSON backup round-trips. */
-function exportCSV() {
-  // Text cells starting with = + - @ would run as formulas in Excel/Sheets.
-  const text = v => {
-    let s = String(v == null ? "" : v);
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const rows = [["Date", "Time", "Type", "Category", "Note", "Goal", "Amount", "Balance effect", "ID"]];
-  txSorted().forEach(t => {
-    const d = new Date(t.ts);
-    const goal = t.goalId ? S.goals.find(g => g.id === t.goalId) : null;
-    rows.push([
-      dayKey(d), d.toTimeString().slice(0, 5), text(t.type), text(catOf(t.category).k), text(t.note),
-      text(goal ? goal.name : ""), t.amount.toFixed(2), signed(t).toFixed(2), text(t.id)
-    ]);
-  });
-  try {
-    downloadFile("aspects-transactions-" + todayKey() + ".csv", "﻿" + rows.map(r => r.join(",")).join("\r\n"), "text/csv");
-    toast(S.tx.length + " transactions exported", "good", "📄");
-  } catch (err) {
-    console.error(err);
-    toast("Export failed", "bad", "⚠️");
-  }
-}
-
 function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
     let parsed;
     try { parsed = JSON.parse(reader.result); }
-    catch (_) { toast("That file is not valid JSON", "bad", "⚠️"); return; }
+    catch (_) { toast("That file isn't an ASPECTS backup", "bad", "⚠️"); return; }
 
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.tx)) {
       toast("That does not look like an ASPECTS backup", "bad", "⚠️");
@@ -2542,17 +2977,17 @@ function importData(file) {
     const bad = incoming.invalidTx.length - knownBad;
     const summary = "This backup holds " + incoming.tx.length + " transactions, " + incoming.tasks.length +
       " tasks and " + incoming.goals.length + " goals" +
-      (bad ? " (plus " + bad + " unreadable rows, which are kept aside and not counted)" : "") + ".";
+      (bad ? " (plus " + bad + " unreadable " + (bad === 1 ? "entry" : "entries") + ", kept aside and not counted)" : "") + ".";
 
     if (!S.tx.length && !S.tasks.length && !S.goals.length) {
       ask("Restore this backup?", summary, () => replaceWith(incoming), null, { yes: "Restore" });
       return;
     }
-    ask("Merge or replace?",
-        summary + " Merge adds only what this browser doesn't already have — duplicates are skipped and nothing here is removed. " +
-        "Replace deletes the data in this browser and uses the backup instead; a copy of your current data is downloaded first.",
+    ask("Add to your records, or replace them?",
+        summary + " “Add what's missing” keeps everything here and adds only what isn't here yet — nothing gets doubled. " +
+        "“Replace everything” deletes what's here and uses the backup instead (a copy of your current records is saved first).",
         () => replaceWith(incoming), "REPLACE",
-        { yes: "Replace", alt: { label: "Merge", run: () => mergeIn(incoming) } });
+        { yes: "Replace everything", alt: { label: "Add what's missing", run: () => mergeIn(incoming) } });
   };
   reader.onerror = () => toast("Could not read that file", "bad", "⚠️");
   reader.readAsText(file);
@@ -2603,12 +3038,12 @@ function mergeIn(inc) {
   ui.lastBalance = null;
   applyRecurring();
   const skipped = inc.tx.length - added;
-  commit("Merged " + added + " transaction" + (added === 1 ? "" : "s") + (skipped ? " · " + skipped + " already here" : ""), "good", "🔀");
+  commit("Added " + added + " transaction" + (added === 1 ? "" : "s") + (skipped ? " · " + skipped + " were already here" : ""), "good", "➕");
 }
 
 function nukeAll() {
   ask("Erase all data?",
-      "Every transaction, task, goal, budget and streak will be permanently deleted. Export a backup first if you are not certain.",
+      "Every transaction, task, goal, budget and streak will be permanently deleted. Save a backup first if you are not certain.",
       () => {
         const theme = S.theme;                     // survives the wipe
         try {
@@ -2632,29 +3067,24 @@ function nukeAll() {
    COMMAND PALETTE
    ============================================================ */
 const COMMANDS = [
-  { e: "↑", t: "Add income",           k: "I",      run: () => openTx("income") },
-  { e: "↓", t: "Add expense",          k: "E",      run: () => openTx("expense") },
-  { e: "📝", t: "New micro-task",      k: "T",      run: openTaskModal },
-  { e: "🎯", t: "New savings goal",    k: "G",      run: () => openModal("goalModal", () => { $("#goalName").value = ""; $("#goalTarget").value = ""; }) },
-  { e: "🍅", t: "Start focus timer",   k: "",       run: () => { setView("tasks"); startPomo(); } },
-  { e: "🧧", t: "Edit budgets",        k: "",       run: openBudgets },
-  { e: "🔁", t: "Add recurring",       k: "",       run: () => openRecur(null) },
-  { e: "◈", t: "Go to Overview",       k: "1",      run: () => setView("overview") },
-  { e: "💰", t: "Go to Money",         k: "2",      run: () => setView("money") },
-  { e: "✅", t: "Go to Tasks",         k: "3",      run: () => setView("tasks") },
-  { e: "🎯", t: "Go to Goals",         k: "4",      run: () => setView("goals") },
-  { e: "⚙️", t: "Go to Settings",      k: "5",      run: () => setView("settings") },
-  { e: "🌓", t: "Toggle dark / light", k: "D",      run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
-  { e: "💾", t: "Export backup",       k: "",       run: () => exportData() },
-  { e: "📄", t: "Export transactions as CSV", k: "", run: exportCSV },
-  { e: "✨", t: "Check for updates",   k: "",       run: () => checkForUpdates(true) },
-  { e: "☢️", t: "Erase all data",      k: "",       run: nukeAll }
-];
-
-const SHORTCUT_HELP = [
-  ["Ctrl K", "Command palette"], ["I", "Add income"], ["E", "Add expense"],
-  ["T", "New task"], ["G", "New goal"], ["D", "Toggle theme"],
-  ["1 – 5", "Jump between sections"], ["Esc", "Close any dialog"]
+  { e: "↑", t: "Add income",             run: () => openTx("income") },
+  { e: "↓", t: "Add expense",            run: () => openTx("expense") },
+  { e: "📝", t: "New micro-task",         run: openTaskModal },
+  { e: "🎯", t: "New savings goal",       run: () => openModal("goalModal", () => { $("#goalName").value = ""; $("#goalTarget").value = ""; }) },
+  { e: "🍅", t: "Start focus timer",      run: () => { setView("tasks"); startPomo(); } },
+  { e: "🧧", t: "Edit budgets",           run: openBudgets },
+  { e: "🔁", t: "Add recurring",          run: () => openRecur(null) },
+  { e: "◈", t: "Go to Overview",         run: () => setView("overview") },
+  { e: "💰", t: "Go to Money",            run: () => setView("money") },
+  { e: "✅", t: "Go to Tasks",            run: () => setView("tasks") },
+  { e: "🎯", t: "Go to Goals",            run: () => setView("goals") },
+  { e: "⚙️", t: "Go to Settings",        run: () => setView("settings") },
+  { e: "🌓", t: "Toggle dark / light",    run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
+  { e: "💾", t: "Save a backup",          run: () => exportData() },
+  { e: "♻️", t: "Restore from a backup", run: () => $("#importFile").click() },
+  { e: "📄", t: "Download a PDF report",  run: downloadReport },
+  { e: "✨", t: "Check for updates",      run: () => checkForUpdates(true) },
+  { e: "☢️", t: "Erase all data",        run: nukeAll }
 ];
 
 let palIndex = 0, palResults = COMMANDS;
@@ -2678,7 +3108,7 @@ function renderPalette(q) {
     ? palResults.map((c, i) =>
         '<div class="pal-item' + (i === palIndex ? " active" : "") + '" role="option" data-pal="' + i +
         '" aria-selected="' + (i === palIndex) + '"><span class="pi-emoji" aria-hidden="true">' + c.e + "</span>" +
-        "<span>" + esc(c.t) + "</span>" + (c.k ? '<kbd class="pi-hint">' + esc(c.k) + "</kbd>" : "") + "</div>").join("")
+        "<span>" + esc(c.t) + "</span></div>").join("")
     : '<div class="pal-empty">No command matches “' + esc(q) + '”</div>';
 
   const active = $(".pal-item.active");
@@ -2753,7 +3183,7 @@ function wire() {
   $("#themeBtn").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
   $("#themeSelect").addEventListener("change", e => applyTheme(e.target.value));
   $("#exportBtn").addEventListener("click", () => exportData());
-  $("#csvBtn").addEventListener("click", exportCSV);
+  $("#reportBtn").addEventListener("click", downloadReport);
   $("#rescueBtn").addEventListener("click", downloadUnreadable);
   $("#checkUpdateBtn").addEventListener("click", () => checkForUpdates(true));
   $("#updateNowBtn").addEventListener("click", applyUpdate);
@@ -2842,6 +3272,7 @@ function wire() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSheet ? closeModal() : openPalette(); return; }
 
     if (openSheet) return;
+    if (document.documentElement.classList.contains("splash-on")) return;   // nothing happens behind the opening animation
     const el = document.activeElement;
     if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -3167,7 +3598,6 @@ function boot() {
   applyTheme(S.theme || "dark");
   applyRecurring();
 
-  if (navigator.platform && /Mac/i.test(navigator.platform)) $("#palKbd").textContent = "⌘ K";
 
   wire();
 
