@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ASPECTS: Product Overview</title>
+<style>
+@page { size: 1280px 720px; margin: 0; }
+@font-face { font-family: "InterDeck"; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "InterDeck"; font-weight: 500; src: url(fonts/inter-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "InterDeck"; font-weight: 600; src: url(fonts/inter-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "InterDeck"; font-weight: 700; src: url(fonts/inter-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "InterDeck"; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format("woff2"); }
+
+:root {
+  --ink: #0d0e13; --ink-2: #14161d; --ink-3: #1b1e27; --line: #262a35;
+  --text: #eceef3; --muted: #9aa1b2; --faint: #6b7286;
+  --paper: #f1e5e3; --paper-ink: #14151b;
+  --orange: #ff4d1f; --violet: #7b6bff; --indigo: #5b4bff; --teal: #00c2a8;
+  --pos: #34d399; --neg: #fb7185;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--ink); }
+body { font-family: "InterDeck", "Noto Color Emoji", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+.slide {
+  width: 1280px; height: 720px; position: relative; overflow: hidden;
+  page-break-after: always; break-after: page;
+  background: radial-gradient(900px 500px at 85% -10%, rgba(91,75,255,.20), transparent 60%),
+              radial-gradient(700px 420px at -10% 110%, rgba(0,194,168,.10), transparent 60%), var(--ink);
+  padding: 64px 72px;
+}
+.slide:last-child { page-break-after: auto; break-after: auto; }
+.paper { background: #f1e5e3; color: var(--paper-ink); }
+
+/* type */
+.kicker { font-size: 13px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--orange); margin-bottom: 14px; }
+h1 { font-family: "InterDeck", sans-serif; font-weight: 800; font-size: 50px; line-height: 1.05; letter-spacing: -.02em; }
+h2 { font-family: "InterDeck", sans-serif; font-weight: 800; font-size: 40px; line-height: 1.08; letter-spacing: -.015em; }
+.lead { font-size: 19px; line-height: 1.55; color: var(--muted); margin-top: 16px; max-width: 520px; }
+.grad { color: #9d90ff; }
+
+/* footer on every slide */
+.foot { position: absolute; left: 72px; right: 72px; bottom: 26px; display: flex; align-items: center; gap: 10px;
+        font-size: 12px; color: var(--faint); letter-spacing: .02em; }
+.foot img { width: 18px; height: 18px; }
+.foot .pg { margin-left: auto; font-variant-numeric: tabular-nums; }
+.paper .foot { color: #8a8190; }
+
+/* features */
+.features { display: grid; gap: 16px; margin-top: 30px; }
+.feat { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start; }
+.feat .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 21px;
+            background: var(--ink-3); border: 1px solid var(--line); }
+.feat b { display: block; font-size: 16.5px; font-weight: 700; margin-bottom: 3px; color: var(--text); }
+.feat span { font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+
+/* phone mockups */
+.phone { width: 262px; aspect-ratio: 390 / 844; border-radius: 40px; padding: 9px; background: #1c1f28;
+         box-shadow: 0 40px 80px rgba(0,0,0,.55), inset 0 0 0 1.5px #343947; position: relative; }
+.phone img { width: 100%; height: 100%; display: block; border-radius: 32px; object-fit: cover; }
+.phone.sm { width: 230px; }
+.phones { position: absolute; right: 70px; top: 60px; display: flex; gap: 26px; align-items: flex-start; }
+.phones .phone { width: 240px; }
+.phones .phone:nth-child(2) { margin-top: 42px; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.chip { font-size: 13.5px; font-weight: 600; padding: 9px 14px; border-radius: 99px; background: var(--ink-3);
+        border: 1px solid var(--line); color: var(--text); }
+
+/* marker strokes */
+.mark { position: relative; display: inline-block; white-space: nowrap; }
+.mark svg { position: absolute; left: -4%; width: 108%; height: auto; overflow: visible; }
+.mark.strike svg { top: 50%; transform: translateY(-45%); }
+.mark.grow svg { top: 78%; }
+.mark path { fill: none; stroke: var(--orange); stroke-linecap: round; stroke-linejoin: round; }
+
+/* torn edges */
+.tear { position: absolute; left: 0; right: 0; height: 26px; background: url(tear.svg) center / 100% 100% no-repeat; }
+
+/* cards */
+.cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 40px; }
+.card { background: var(--ink-2); border: 1px solid var(--line); border-radius: 22px; padding: 28px 26px; position: relative; overflow: hidden; }
+.card .big { font-size: 34px; }
+.card h3 { font-size: 21px; font-weight: 800; margin: 14px 0 8px; }
+.card p { font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+.card ul { list-style: none; margin-top: 14px; display: grid; gap: 7px; }
+.card li { font-size: 14px; color: var(--text); padding-left: 18px; position: relative; }
+.card li::before { content: ""; position: absolute; left: 0; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--violet); }
+.card .bar { position: absolute; left: 0; top: 0; right: 0; height: 4px; }
+</style>
+</head>
+<body>
+
+<!-- 1 · COVER -->
+<section class="slide" style="padding:0;">
+  <div style="position:absolute; inset:0; background:
+      radial-gradient(800px 520px at 75% 40%, rgba(91,75,255,.28), transparent 65%), var(--ink);"></div>
+  <div style="position:absolute; left:0; top:0; bottom:0; width:690px; background:#f1e5e3;"></div>
+  <div style="position:absolute; left:661px; top:0; bottom:0; width:30px; background:url(tear-v.svg) center/100% 100% no-repeat;"></div>
+  <div style="position:absolute; left:72px; top:78px; width:560px; color:var(--paper-ink);">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <img src="logo.svg" style="width:62px; height:62px;" alt="">
+      <div>
+        <div style="font-weight:800; font-size:30px; letter-spacing:.24em;">ASPECTS</div>
+        <div style="font-size:15px; color:#6d6470; margin-top:2px; letter-spacing:.02em;">Money &amp; Micro-Goals</div>
+      </div>
+    </div>
+    <h1 style="font-size:70px; margin-top:70px; line-height:1.08;">
+      Less <span class="mark strike">guessing<svg viewBox="0 0 100 14"><path stroke-width="3.4" d="M2 9C20 4 34 12 50 7S80 11 98 5"/><path stroke-width="3.4" d="M4 11C30 6 60 13 96 8"/></svg></span>,<br>
+      more <span class="mark grow">growing<svg viewBox="0 0 100 26"><path stroke-width="2.6" d="M2 18C30 24 62 20 90 6"/><path stroke-width="2.6" d="M80 4L91 5L88 16"/></svg></span>.
+    </h1>
+    <p style="font-size:20px; line-height:1.55; color:#5d5560; margin-top:62px; max-width:500px;">
+      A private, offline-first app that tracks your money, grows your habits and saves you towards the things that matter.
+    </p>
+    <div style="margin-top:44px; font-size:13px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:#8a8190;">
+      Product overview &nbsp;·&nbsp; Version 1.2.0 &nbsp;·&nbsp; October 2026
+    </div>
+  </div>
+  <div style="position:absolute; right:300px; top:96px; transform:rotate(-6deg);"><div class="phone sm"><img src="shots/splash-4400.png" alt=""></div></div>
+  <div style="position:absolute; right:58px; top:58px; transform:rotate(5deg);"><div class="phone"><img src="shots/overview.png" alt=""></div></div>
+</section>
+
+<!-- 2 · WHAT IT IS -->
+<section class="slide">
+  <div class="kicker">What is ASPECTS</div>
+  <h2>One app for your money<br>and your <span class="grad">momentum</span>.</h2>
+  <p class="lead" style="max-width:760px;">Most budgeting apps only look backwards. ASPECTS pairs a money tracker with small daily goals, so every day you know where you stand and what to do next.</p>
+  <div class="cards3">
+    <div class="card"><div class="bar" style="background:linear-gradient(90deg,#34d399,#00c2a8)"></div>
+      <div class="big">💰</div><h3>Track your money</h3>
+      <p>Income and expenses in seconds, with categories, budgets and charts.</p>
+      <ul><li>Monthly budgets per category</li><li>Recurring salary, rent and subscriptions</li><li>Your full history, month by month</li></ul></div>
+    <div class="card"><div class="bar" style="background:linear-gradient(90deg,#7b6bff,#5b4bff)"></div>
+      <div class="big">✅</div><h3>Grow your habits</h3>
+      <p>Break big plans into micro-tasks you can finish today, and stay focused.</p>
+      <ul><li>Priorities, due dates and reminders</li><li>A built-in 25-minute focus timer</li><li>Daily streaks and levels</li></ul></div>
+    <div class="card"><div class="bar" style="background:linear-gradient(90deg,#ff4d1f,#fbbf24)"></div>
+      <div class="big">🎯</div><h3>Save for goals</h3>
+      <p>Set targets like a laptop or a trip and watch the progress rings fill.</p>
+      <ul><li>Move money in or out at any time</li><li>Estimated time to reach each goal</li><li>A celebration when you get there 🎉</li></ul></div>
+  </div>
+  <div class="chips">
+    <span class="chip">📶 Works with no internet</span><span class="chip">🔒 Your data stays on your device</span>
+    <span class="chip">📲 Installs like a real app</span><span class="chip">🙅 No account, no ads</span><span class="chip">🌍 Rands, built in South Africa</span>
+  </div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">02</span></div>
+</section>
+
+<!-- 4 · OVERVIEW -->
+<section class="slide">
+  <div style="width:560px;">
+    <div class="kicker">Overview</div>
+    <h2>Your whole picture<br>on one screen.</h2>
+    <p class="lead">Open the app and you know where you stand, before you've scrolled.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">📈</div><div><b>Liquid balance &amp; trend</b><span>Your balance right now and how it has moved over time.</span></div></div>
+      <div class="feat"><div class="ic">🗓️</div><div><b>This month at a glance</b><span>Income, expenses, money moved into goals and what's left.</span></div></div>
+      <div class="feat"><div class="ic">🧧</div><div><b>Budgets that warn you</b><span>Bars turn amber near the limit and red when you're over.</span></div></div>
+      <div class="feat"><div class="ic">⏰</div><div><b>Due &amp; overdue</b><span>The tasks that need you in the next two days, plus your recent activity.</span></div></div>
+    </div>
+  </div>
+  <div class="phones"><div class="phone"><img src="shots/overview.png" alt=""></div><div class="phone"><img src="shots/overview-2.png" alt=""></div></div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">03</span></div>
+</section>
+
+<!-- 5 · RECORDING -->
+<section class="slide">
+  <div style="width:560px;">
+    <div class="kicker">Recording money</div>
+    <h2>Two taps, a few numbers, done.</h2>
+    <p class="lead">Tap <b style="color:var(--pos);">↑ Income</b> or <b style="color:var(--neg);">↓ Expense</b>, enter the amount, pick a category and confirm. It's saved on the spot, even offline.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">🍔</div><div><b>Eight clear categories</b><span>Food, Transport, Housing, Bills, Tech, Health, Leisure and General.</span></div></div>
+      <div class="feat"><div class="ic">🔁</div><div><b>Recurring entries</b><span>Salary, rent and subscriptions log themselves on their day each month.</span></div></div>
+      <div class="feat"><div class="ic">↩️</div><div><b>Undo, always</b><span>Deleted something by mistake? One tap brings it back.</span></div></div>
+      <div class="feat"><div class="ic">🚨</div><div><b>Instant budget alerts</b><span>Go over a category's limit and ASPECTS tells you straight away.</span></div></div>
+    </div>
+  </div>
+  <div class="phones"><div class="phone"><img src="shots/add-expense.png" alt=""></div><div class="phone"><img src="shots/money-3.png" alt=""></div></div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">04</span></div>
+</section>
+
+<!-- 6 · INSIGHTS -->
+<section class="slide">
+  <div style="width:560px;">
+    <div class="kicker">Money insights</div>
+    <h2>See exactly where<br>your money goes.</h2>
+    <p class="lead">Every month is kept, forever. Go back to October from next year and it's all still there.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">🗂️</div><div><b>Any month, or All time</b><span>Pick a month to see its income, spending and net, or view your whole history.</span></div></div>
+      <div class="feat"><div class="ic">🍩</div><div><b>Spending by category</b><span>A colour-coded chart with amounts and percentages for each category.</span></div></div>
+      <div class="feat"><div class="ic">🔍</div><div><b>Search everything</b><span>Find any transaction by its note or category in an instant.</span></div></div>
+      <div class="feat"><div class="ic">✉️</div><div><b>Budget envelopes</b><span>A monthly cap per category, with how much is left to spend.</span></div></div>
+    </div>
+  </div>
+  <div class="phones"><div class="phone"><img src="shots/money.png" alt=""></div><div class="phone"><img src="shots/money-2.png" alt=""></div></div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">05</span></div>
+</section>
+
+<!-- 7 · TASKS -->
+<section class="slide">
+  <div style="width:560px;">
+    <div class="kicker">Micro-goals &amp; focus</div>
+    <h2>Small steps.<br><span class="grad">Real momentum.</span></h2>
+    <p class="lead">Turn big plans into micro-tasks you can finish today, and build the habit of finishing them.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">📝</div><div><b>Micro-tasks with priorities</b><span>High, medium or low, with due dates and filters. Drag to reorder.</span></div></div>
+      <div class="feat"><div class="ic">💸</div><div><b>Tasks that cost money</b><span>Tick "Renew car licence" and its R504 is logged as an expense.</span></div></div>
+      <div class="feat"><div class="ic">🍅</div><div><b>Built-in focus timer</b><span>25 minutes of focus, 5 of rest. It even survives closing the app.</span></div></div>
+      <div class="feat"><div class="ic">🔥</div><div><b>Streaks &amp; levels</b><span>Earn XP for every task and session, and keep your daily streak alive.</span></div></div>
+    </div>
+  </div>
+  <div class="phones"><div class="phone"><img src="shots/tasks.png" alt=""></div><div class="phone"><img src="shots/tasks-2.png" alt=""></div></div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">06</span></div>
+</section>
+
+<!-- 8 · GOALS -->
+<section class="slide">
+  <div style="width:560px;">
+    <div class="kicker">Savings goals</div>
+    <h2>Name it. Fund it.<br>Watch the ring fill.</h2>
+    <p class="lead">Money you move into a goal leaves your spending balance but stays in your records, so nothing is ever lost.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">⭕</div><div><b>Progress rings</b><span>Each goal shows what's saved, what's left and the percentage done.</span></div></div>
+      <div class="feat"><div class="ic">⏳</div><div><b>Time to goal</b><span>"~7 months at your current rate", worked out from how you actually save.</span></div></div>
+      <div class="feat"><div class="ic">💱</div><div><b>Add or take back</b><span>Move money in, or back out when life happens.</span></div></div>
+      <div class="feat"><div class="ic">🎉</div><div><b>Celebrate the win</b><span>Confetti when a goal is reached, because you earned it.</span></div></div>
+    </div>
+  </div>
+  <div class="phones"><div class="phone"><img src="shots/goals.png" alt=""></div><div class="phone"><img src="shots/goals-light.png" alt=""></div></div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">07</span></div>
+</section>
+
+<!-- 9 · PDF REPORTS -->
+<section class="slide">
+  <div style="width:520px;">
+    <div class="kicker">New in 1.2 · Reports</div>
+    <h2>Your money, as a<br>polished PDF.</h2>
+    <p class="lead">Pick a week or a month and tap <b style="color:var(--text);">Download PDF</b>: a clean statement ready to keep, print or share.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">🔢</div><div><b>The four numbers that matter</b><span>Money in, money out, savings and what's left, plus a one-line summary.</span></div></div>
+      <div class="feat"><div class="ic">📊</div><div><b>Where the money went</b><span>Spending by category as colour-coded bars with percentages.</span></div></div>
+      <div class="feat"><div class="ic">🧾</div><div><b>Every transaction</b><span>Dated and categorised, across as many pages as it needs.</span></div></div>
+      <div class="feat"><div class="ic">🔒</div><div><b>Made on your phone</b><span>Created on your device, even offline. Nothing is uploaded.</span></div></div>
+    </div>
+  </div>
+  <div style="position:absolute; right:90px; top:58px; width:405px; transform:rotate(2.5deg); box-shadow:0 40px 90px rgba(0,0,0,.6); border-radius:6px; overflow:hidden; background:#fff;">
+    <img src="shots/report-1.png" style="width:100%; display:block;" alt="">
+  </div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">08</span></div>
+</section>
+
+<!-- 10 · PRIVACY & BACKUP -->
+<section class="slide">
+  <div style="width:560px;">
+    <div class="kicker">Privacy &amp; backups</div>
+    <h2>Your records never<br>leave your device.</h2>
+    <p class="lead">No account and no cloud: your finances live on your phone. Backups are in plain words for everyone.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">💾</div><div><b>Save a backup</b><span>One file holds everything. Keep it safe or move it to a new phone.</span></div></div>
+      <div class="feat"><div class="ic">♻️</div><div><b>Restore, your way</b><span>"Add what's missing" without duplicates, or "Replace everything" with a safety copy first.</span></div></div>
+      <div class="feat"><div class="ic">🛡️</div><div><b>Safe by design</b><span>Damaged data is set aside instead of being overwritten, and upgrades never wipe records.</span></div></div>
+      <div class="feat"><div class="ic">🪟</div><div><b>Two tabs, one truth</b><span>The installed app and a browser tab stay in sync without erasing each other's entries.</span></div></div>
+    </div>
+  </div>
+  <div class="phones"><div class="phone"><img src="shots/settings.png" alt=""></div><div class="phone"><img src="shots/palette.png" alt=""></div></div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">09</span></div>
+</section>
+
+<!-- 11 · EVERYWHERE -->
+<section class="slide">
+  <div class="kicker">Everywhere you are</div>
+  <h2>Phone, tablet or desktop. Online or not.</h2>
+  <div style="display:grid; grid-template-columns: 1fr 330px; gap:40px; margin-top:30px; align-items:start;">
+    <div style="border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:0 30px 70px rgba(0,0,0,.55); max-height:478px;">
+      <div style="height:26px; background:#1c1f28; display:flex; align-items:center; gap:7px; padding:0 12px;">
+        <i style="width:10px;height:10px;border-radius:50%;background:#ff5f57;display:block"></i><i style="width:10px;height:10px;border-radius:50%;background:#febc2e;display:block"></i><i style="width:10px;height:10px;border-radius:50%;background:#28c840;display:block"></i>
+        <span style="margin-left:14px; font-size:11px; color:var(--faint);">tshumasicelo.github.io/my-website</span></div>
+      <img src="shots/desktop-overview.png" style="width:100%; display:block;" alt="">
+    </div>
+    <div class="features" style="margin-top:0;">
+      <div class="feat"><div class="ic">📲</div><div><b>Install in one tap</b><span>Add it to your home screen and it opens full-screen, like any app.</span></div></div>
+      <div class="feat"><div class="ic">📶</div><div><b>Works offline</b><span>No signal? Everything still works, and nothing is lost.</span></div></div>
+      <div class="feat"><div class="ic">✨</div><div><b>One-tap updates</b><span>"Update now" brings the newest version, with your data untouched.</span></div></div>
+      <div class="feat"><div class="ic">🌓</div><div><b>Dark or light</b><span>Or match your phone's setting automatically.</span></div></div>
+      <div class="feat"><div class="ic">🔍</div><div><b>Search &amp; shortcuts</b><span>Find any action from the search bar, or add an expense from your home screen.</span></div></div>
+    </div>
+  </div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">10</span></div>
+</section>
+
+<!-- 12 · TRUST -->
+<section class="slide">
+  <div class="kicker">Built to be trusted</div>
+  <h2>Tested on every change,<br>on the engines your users use.</h2>
+  <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:20px; margin-top:62px;">
+    <div class="card" style="padding:38px 26px;"><div style=" font-weight:800; font-size:54px;" class="grad">66</div><p style="margin-top:8px;"><b style="color:var(--text);">automated checks</b> run before any update reaches users.</p></div>
+    <div class="card" style="padding:38px 26px;"><div style=" font-weight:800; font-size:54px;" class="grad">2</div><p style="margin-top:8px;"><b style="color:var(--text);">browser engines</b>: WebKit (Safari, every iPhone) and Chromium (Chrome, Android).</p></div>
+    <div class="card" style="padding:38px 26px;"><div style=" font-weight:800; font-size:54px;" class="grad">0</div><p style="margin-top:8px;"><b style="color:var(--text);">records lost</b> when the app updates, as tested from the previous version with real data.</p></div>
+    <div class="card" style="padding:38px 26px;"><div style=" font-weight:800; font-size:54px;" class="grad">100%</div><p style="margin-top:8px;"><b style="color:var(--text);">on your device</b>: no accounts, no ads, no analytics, no cloud copy of your finances.</p></div>
+  </div>
+  <div class="chips" style="margin-top:48px;">
+    <span class="chip">✔ Upgrades from older versions keep every transaction</span><span class="chip">✔ Restart, refresh &amp; offline tested</span>
+    <span class="chip">✔ Damaged or unknown data is never overwritten</span><span class="chip">✔ Third-party code is integrity-locked</span>
+  </div>
+  <div class="foot"><img src="logo.svg" alt="">ASPECTS · Less guessing, more growing.<span class="pg">11</span></div>
+</section>
+
+<!-- 13 · CLOSING -->
+<section class="slide paper" style="padding:0;">
+  <div style="position:absolute; left:0; right:0; top:0; height:210px; background:var(--ink);"></div>
+  <div class="tear" style="top:209px;"></div>
+  <div style="position:absolute; left:0; right:0; bottom:0; height:170px; background:var(--ink);"></div>
+  <div class="tear" style="bottom:169px; transform:scaleY(-1);"></div>
+  <div style="position:absolute; left:0; right:0; top:252px; text-align:center;">
+    <img src="logo.svg" style="width:70px; height:70px;" alt="">
+    <h1 style="font-size:62px; margin-top:20px;">
+      Less <span class="mark strike">guessing<svg viewBox="0 0 100 14"><path stroke-width="3.4" d="M2 9C20 4 34 12 50 7S80 11 98 5"/><path stroke-width="3.4" d="M4 11C30 6 60 13 96 8"/></svg></span>,
+      more <span class="mark grow">growing<svg viewBox="0 0 100 26"><path stroke-width="2.6" d="M2 18C30 24 62 20 90 6"/><path stroke-width="2.6" d="M80 4L91 5L88 16"/></svg></span>.
+    </h1>
+  </div>
+  <div style="position:absolute; left:0; right:0; bottom:56px; text-align:center; color:var(--text);">
+    <div style="font-size:24px; font-weight:700; letter-spacing:.01em;">tshumasicelo.github.io/my-website</div>
+    <div style="font-size:15px; color:var(--muted); margin-top:8px;">Open it on your phone → Share / menu → <b style="color:var(--text);">Add to Home Screen</b></div>
+  </div>
+  <div style="position:absolute; left:72px; top:70px; display:flex; align-items:center; gap:12px; color:var(--text);">
+    <span style="font-weight:800; letter-spacing:.24em; font-size:18px;">ASPECTS</span><span style="color:var(--faint); font-size:14px;">Money &amp; Micro-Goals · v1.2.0</span>
+  </div>
+</section>
+
+</body>
+</html>
