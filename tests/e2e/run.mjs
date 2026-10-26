@@ -114,7 +114,16 @@ async function addViaUI(page, type, amount, note, date) {
   if (await page.evaluate(() => S.tx.length) !== rows + 1) throw new Error(`adding "${note}" through the dialog did not record it`);
   await sleep(200);
 }
-async function goto(page, url = BASE) { await page.goto(url, { waitUntil: "load" }); await sleep(600); }
+async function goto(page, url = BASE) {
+  await page.goto(url, { waitUntil: "load" });
+  // The opening animation plays on every load. Most checks are about what is
+  // underneath it, so skip it the way a person can: press any key.
+  if (await page.evaluate(() => document.documentElement.classList.contains("splash-on"))) {
+    await page.keyboard.press("Shift");
+    await page.waitForFunction(() => !document.documentElement.classList.contains("splash-on"), null, { timeout: 5000 });
+  }
+  await sleep(300);
+}
 const appVersion = page => page.evaluate(() => (typeof APP_VERSION !== "undefined" ? APP_VERSION : "old"));
 
 const now = new Date();
@@ -228,16 +237,22 @@ await page.click("#toasts .toast button");
 await sleep(200);
 check("delete: Undo restores and saves it", (await state(page)).tx.some(t => t.id === "hist-sep"));
 
-/* ---- 6. CSV ---- */
+/* ---- 6. PDF report ---- */
 await page.evaluate(KEY => { const s = JSON.parse(localStorage.getItem(KEY)); s.tx.push({ id: "f1", type: "expense", amount: 1, category: "General", note: "=HYPERLINK(\"x\")", ts: new Date().toISOString() }); localStorage.setItem(KEY, JSON.stringify(s)); }, KEY);
 await goto(page);
 await page.click('.tab[data-view="settings"]');
-const [csvDl] = await Promise.all([page.waitForEvent("download"), page.click("#csvBtn")]);
-const csv = fs.readFileSync(await csvDl.path(), "utf8");
-const lines = csv.trim().split(/\r\n/);
-check("csv: header + one line per transaction", lines.length === 6 && lines[0].includes("Date,Time,Type"), lines.length + " lines");
-check("csv: formula text is neutralised", csv.includes(`"'=HYPERLINK(""x"")"`));
-check("csv: amounts stay numeric", /,1200\.50,-1200\.50,/.test(csv));
+await page.selectOption("#reportPeriod", "all");
+const [pdfDl] = await Promise.all([page.waitForEvent("download"), page.click("#reportBtn")]);
+const pdf = fs.readFileSync(await pdfDl.path(), "latin1");
+check("pdf: a real PDF file", pdf.startsWith("%PDF-1.4") && pdf.trimEnd().endsWith("%%EOF") &&
+      /^aspects-report-all-time-\d{4}-\d{2}-\d{2}\.pdf$/.test(pdfDl.suggestedFilename()), pdfDl.suggestedFilename());
+// Every cross-reference entry must point exactly at its object, or readers call the file damaged.
+const xrefAt = Number(pdf.match(/startxref\s+(\d+)/)[1]);
+const entries = pdf.slice(xrefAt).match(/^\d{10} \d{5} n $/gm) || [];
+check("pdf: internal index is exact", pdf.startsWith("xref", xrefAt) && entries.length > 4 &&
+      entries.every((e, i) => pdf.startsWith((i + 1) + " 0 obj", Number(e.slice(0, 10)))), entries.length + " objects");
+check("pdf: headline numbers and rows are in it", pdf.includes("(Money in)") && pdf.includes("(-R1,200.50)") && pdf.includes("(September rent)"));
+check("pdf: brackets in notes are escaped", pdf.includes('(=HYPERLINK\\("x"\\))'));
 
 /* ---- 7. JSON backup, merge, replace, undo ---- */
 const [jsonDl] = await Promise.all([page.waitForEvent("download"), page.click("#exportBtn")]);
@@ -316,7 +331,7 @@ check("splash: lifts by itself", await waitSplashGone(fresh, 9000));
 const shownMs = await fresh.evaluate(() => window.__spOut - window.__spOn);
 check("splash: app stays covered for at least 4.5 s", shownMs >= 4500, Math.round(shownMs) + " ms");
 await fresh.reload({ waitUntil: "load" });
-check("splash: not replayed on reload", !(await splashOn(fresh)));
+check("splash: plays again on refresh", await splashOn(fresh));
 await fresh.close();
 
 fresh = await ctx.newPage();
@@ -324,26 +339,15 @@ await fresh.goto(BASE, { waitUntil: "load" });
 await sleep(250);
 await fresh.mouse.click(200, 300);
 check("splash: a tap skips it", await waitSplashGone(fresh, 900));
-await fresh.click('.tab[data-view="settings"]');
-await fresh.selectOption("#splashSelect", "off");
-await fresh.close();
-
-fresh = await ctx.newPage();
-await fresh.goto(BASE, { waitUntil: "load" });
-check("splash: Off in Settings is respected", !(await splashOn(fresh)));
-await fresh.click('.tab[data-view="settings"]');
-await fresh.click("#splashReplay");
-await sleep(150);
-check("splash: Replay plays it on demand", await splashOn(fresh));
-await waitSplashGone(fresh, 9000);
-await fresh.selectOption("#splashSelect", "on");
 await fresh.close();
 
 fresh = await ctx.newPage();
 await fresh.goto(BASE + "?go=expense", { waitUntil: "load" });
-check("splash: home-screen shortcuts skip it", !(await splashOn(fresh)));
-await fresh.waitForSelector("#txModal.open", { timeout: 3000 }).catch(() => {});
-check("splash: shortcut still opens its dialog", await fresh.evaluate(() => document.getElementById("txModal").classList.contains("open")));
+check("splash: plays on home-screen shortcut launches too", await splashOn(fresh));
+await waitSplashGone(fresh, 9000);
+check("splash: the shortcut's dialog is open underneath", await fresh.evaluate(() => document.getElementById("txModal").classList.contains("open")));
+check("settings: no animation switch and no keyboard letters", await fresh.evaluate(() =>
+  !document.getElementById("splashSelect") && !document.getElementById("shortcutList") && !document.querySelector("kbd")));
 await fresh.close();
 
 /* ---- 9. Update check & Update now (GitHub Pages lag simulated) ---- */

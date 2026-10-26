@@ -35,18 +35,9 @@
 <script async id="chartLib" src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"
         integrity="sha384-dug+JxfBvklEQdJ4AYuBBAIScUz0bVN73xpy273gcAwHjb3qI0fXmuYNaNfdyYJG" crossorigin="anonymous"></script>
 
-<!-- Opening animation gate: decided before the body paints, so a reload never
-     flashes the splash. Once per launch (session), never for home-screen
-     shortcut launches, and never when switched off in Settings. -->
-<script>
-try {
-  if (localStorage.getItem("aspects.splash") !== "off" &&
-      !sessionStorage.getItem("aspects.splashShown") && !/[?&]go=/.test(location.search)) {
-    document.documentElement.classList.add("splash-on");
-    sessionStorage.setItem("aspects.splashShown", "1");
-  }
-} catch (_) { /* storage blocked: just open the app */ }
-</script>
+<!-- The opening animation plays every time ASPECTS opens, restarts or refreshes.
+     Switched on here, before the body paints, so the app never flashes first. -->
+<script>document.documentElement.classList.add("splash-on");</script>
 
 <style>
 /* ============================================================
@@ -220,12 +211,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: background .16s, border-color .16s;
 }
 .kbd-btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
-kbd {
-  font-family: inherit; font-size: 10.5px; font-weight: 600; white-space: nowrap;
-  padding: 2px 5px; border-radius: 5px;
-  background: var(--surface-3); border: 1px solid var(--border);
-  color: var(--faint);
-}
 
 /* --- Tabs --- */
 .tabs {
@@ -265,7 +250,7 @@ kbd {
   padding: 20px;
   box-shadow: var(--shadow);
 }
-.card + .card { margin-top: 16px; }
+.card + .card, .card + .grid, .grid + .card, .grid + .grid { margin-top: 16px; }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-head h3 { font-size: 15px; letter-spacing: -.01em; }
 .card-head .spacer { margin-left: auto; }
@@ -541,7 +526,6 @@ select.input {
   font-size: 13.5px;
 }
 .pal-item .pi-emoji { font-size: 15px; width: 20px; text-align: center; }
-.pal-item .pi-hint { margin-left: auto; }
 .pal-item.active { background: var(--accent-soft); color: var(--accent); }
 .pal-empty { padding: 26px; text-align: center; color: var(--faint); font-size: 13px; }
 
@@ -584,13 +568,10 @@ select.input {
 .danger-zone p { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; }
 
 .hint { font-size: 12px; color: var(--faint); }
-.shortcut-list { display: grid; gap: 7px; }
-.shortcut-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-.shortcut-row kbd { margin-left: auto; }
 
 @media (max-width: 560px) {
   .brand-sub { display: none; }
-  .kbd-btn .kb-label, .kbd-btn kbd { display: none; }
+  .kbd-btn .kb-label { display: none; }
   .kbd-btn { padding: 0 11px; }
   .card { padding: 16px; border-radius: var(--r); }
   .wrap { padding: 16px 12px 90px; }
@@ -607,9 +588,6 @@ select.input {
      4.6  exit. Motion stays snappy; the extra time goes to the story.
    A tap or any key skips straight to the app.
    ============================================================ */
-/* Keyboard shortcuts mean nothing on a touch-only phone or tablet. */
-@media (hover: none) and (pointer: coarse) { .kb-only { display: none; } }
-
 #splash { display: none; }
 .splash-on #splash {
   --sp-ink: #14151b; --sp-orange: #ff4d1f; --sp-gap: 124px;
@@ -756,7 +734,7 @@ select.input {
   </div>
 </div></div>
 <script>
-/* Plays the opening animation; window.playSplash lets Settings replay it. */
+/* Plays the opening animation. */
 (function () {
   var root = document.documentElement, el = document.getElementById("splash"), timer = null, playing = false;
   if (!el) return;
@@ -785,7 +763,6 @@ select.input {
     window.addEventListener("keydown", finish, true);
   }
   el.addEventListener("pointerdown", finish);
-  window.playSplash = play;
   if (root.classList.contains("splash-on")) play();
 })();
 </script>
@@ -809,7 +786,7 @@ select.input {
     <span class="chip flame" id="streakChip" title="Daily task streak">🔥 <span id="streakNum">0</span></span>
     <span class="chip level" id="levelChip" title="Experience level">Lv <span id="levelNum">1</span></span>
     <button class="kbd-btn" id="paletteBtn" aria-label="Open command palette">
-      <span aria-hidden="true">⌘</span><span class="kb-label">Search</span><kbd id="palKbd">Ctrl K</kbd>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span class="kb-label">Search</span>
     </button>
     <button class="icon-btn" id="themeBtn" aria-label="Toggle colour theme">🌙</button>
   </div>
@@ -973,14 +950,21 @@ select.input {
 
 <!-- ============================ SETTINGS ============================ -->
 <section class="view" id="view-settings" role="tabpanel" hidden>
+  <div class="card">
+    <div class="card-head"><h3>Reports</h3></div>
+    <p class="hint" style="margin-bottom:12px;">A clean PDF of your money in and out — ready to keep, print or share.</p>
+    <div class="row row-wrap" style="gap:9px;">
+      <select class="input" id="reportPeriod" style="flex:1; min-width:160px;" aria-label="Report period"></select>
+      <button class="btn btn-primary" id="reportBtn">📄 Download PDF</button>
+    </div>
+  </div>
+
   <div class="grid grid-2">
     <div class="card">
       <div class="card-head"><h3>Backup</h3></div>
       <p class="hint" style="margin-bottom:14px;">Your records are kept on this device only and are never uploaded. Now and then, save a backup: it's a file that gets everything back if you change phones or clear your browser.</p>
       <button class="btn btn-primary btn-block" id="exportBtn">💾 Save a backup</button>
       <button class="btn btn-ghost btn-block" id="importBtn" style="margin-top:9px;">♻️ Restore from a backup</button>
-      <button class="btn btn-ghost btn-block" id="csvBtn" style="margin-top:9px;">📊 Download as a spreadsheet</button>
-      <p class="hint" style="margin-top:8px;">The spreadsheet opens in Excel or Google Sheets, for viewing your transactions. To bring records back into ASPECTS, use a backup.</p>
       <input type="file" id="importFile" accept="application/json,.json" class="sr-only" aria-label="Choose a backup file">
       <p class="hint" id="storageInfo" style="margin-top:12px;"></p>
       <p class="hint" id="storageHealth" style="margin-top:6px;"></p>
@@ -996,20 +980,6 @@ select.input {
           <option value="light">Light</option>
           <option value="system">Match system</option>
         </select>
-      </div>
-      <div class="field" style="margin-top:12px;">
-        <label for="splashSelect">Opening animation</label>
-        <div class="row" style="gap:9px;">
-          <select class="input" id="splashSelect" style="flex:1;">
-            <option value="on">Play when ASPECTS opens</option>
-            <option value="off">Off</option>
-          </select>
-          <button class="btn btn-ghost btn-sm" id="splashReplay">▶ Replay</button>
-        </div>
-      </div>
-      <div class="kb-only">
-        <div class="card-head" style="margin:20px 0 10px;"><h3>Keyboard</h3></div>
-        <div class="shortcut-list" id="shortcutList"></div>
       </div>
     </div>
   </div>
@@ -1035,7 +1005,7 @@ select.input {
     <div class="card-head"><h3>Danger zone</h3></div>
     <div class="danger-zone">
       <h4>Erase everything ☢️</h4>
-      <p>Deletes every transaction, task, goal, budget and streak. This cannot be undone — export a backup first.</p>
+      <p>Deletes every transaction, task, goal, budget and streak. This cannot be undone — save a backup first.</p>
       <button class="btn btn-danger" id="nukeBtn">Erase all data</button>
     </div>
   </div>
@@ -2083,19 +2053,18 @@ function goalETA(g, saved, complete) {
 /* ---------- Settings ---------- */
 function renderSettings() {
   $("#themeSelect").value = S.theme || "dark";
-  $("#splashSelect").value = splashPref();
   try {
-    $("#storageInfo").textContent = S.tx.length + " transactions · " + S.tasks.length + " tasks · " +
-      S.goals.length + " goals" +
+    const n = (k, word) => k + " " + word + (k === 1 ? "" : "s");
+    $("#storageInfo").textContent = n(S.tx.length, "transaction") + " · " + n(S.tasks.length, "task") + " · " +
+      n(S.goals.length, "goal") +
       (S.invalidTx.length ? " · " + S.invalidTx.length + " unreadable rows kept aside" : "") +
       " · last backup: " + (S.lastBackup ? relDay(S.lastBackup) : "never");
   } catch (_) { $("#storageInfo").textContent = ""; }
 
+  renderReportPeriods();
   renderStorageHealth();
   renderInstall();
   renderUpdate();
-  $("#shortcutList").innerHTML = SHORTCUT_HELP
-    .map(s => '<div class="shortcut-row"><span>' + esc(s[1]) + "</span><kbd>" + esc(s[0]) + "</kbd></div>").join("");
 }
 
 /* ============================================================
@@ -2680,16 +2649,299 @@ function applyTheme(pref) {
 }
 
 /* ============================================================
-   OPENING ANIMATION — preference and replay. The animation itself
-   lives at the top of <body> so it can paint before this script runs.
-   It is a display preference, not user data, so it has its own key.
+   PDF REPORT — a money statement for a week, a month or all time,
+   written as a real PDF by hand: no library, works offline, and
+   nothing leaves the device. It uses the built-in PDF Helvetica
+   fonts, so there is nothing to embed; text is WinAnsi-encoded.
    ============================================================ */
-function splashPref() {
-  try { return localStorage.getItem("aspects.splash") === "off" ? "off" : "on"; } catch (_) { return "on"; }
+const PDF_W = 595.28, PDF_H = 841.89, PDF_M = 40;   // A4 in points, side margin
+
+/* Advance widths (per 1000 em) for ASCII 32–126, from Adobe's Helvetica AFM files —
+   needed to right-align amounts and to shorten long notes. */
+const HELV_W = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const HELV_BW = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+/* Typographic characters outside Latin-1 that WinAnsi still has, with their widths. */
+const WIN_ANSI = { "€": [128, 556], "…": [133, 1000], "‘": [145, 222], "’": [146, 222], "“": [147, 333], "”": [148, 333],
+                   "•": [149, 350], "–": [150, 556], "—": [151, 1000] };
+
+const pdfNum = n => String(Math.round(n * 100) / 100);
+
+/* Emoji and pictographs have no glyph in the PDF fonts: drop them, and the double space they leave. */
+function pdfClean(s) {
+  return String(s).replace(/[\u2190-\u2BFF\u200D\uFE0F]|[\u{1F000}-\u{1FFFF}]/gu, "").replace(/\s{2,}/g, " ").trim();
 }
 
-function replaySplash() {
-  if (typeof window.playSplash === "function") window.playSplash();
+function pdfStr(s) {
+  let out = "";
+  for (const ch of pdfClean(s)) {
+    let c = ch.codePointAt(0);
+    if (WIN_ANSI[ch]) c = WIN_ANSI[ch][0];
+    else if (c > 255 || c < 32 || (c >= 127 && c < 160)) c = 63;          // no glyph: "?"
+    if (c === 40 || c === 41 || c === 92) out += "\\" + String.fromCharCode(c);
+    else if (c < 127) out += String.fromCharCode(c);
+    else out += "\\" + c.toString(8).padStart(3, "0");                   // keeps the file pure ASCII
+  }
+  return "(" + out + ")";
+}
+
+function pdfWidth(s, size, bold) {
+  const table = bold ? HELV_BW : HELV_W;
+  let w = 0;
+  for (const ch of pdfClean(s)) {
+    const c = ch.codePointAt(0);
+    w += c >= 32 && c <= 126 ? table[c - 32] : WIN_ANSI[ch] ? WIN_ANSI[ch][1] : 556;
+  }
+  return w * size / 1000;
+}
+
+function pdfFit(s, size, bold, max) {
+  s = pdfClean(s);
+  if (pdfWidth(s, size, bold) <= max) return s;
+  while (s.length && pdfWidth(s + "…", size, bold) > max) s = s.slice(0, -1);
+  return s.trimEnd() + "…";
+}
+
+function pdfWrap(s, size, bold, max) {
+  const lines = [];
+  let cur = "";
+  String(s).split(" ").forEach(word => {
+    const next = cur ? cur + " " + word : word;
+    if (cur && pdfWidth(next, size, bold) > max) { lines.push(cur); cur = word; } else cur = next;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+/* One page of drawing operations. Coordinates are from the top-left in points;
+   y is a text baseline or a box's top edge. */
+function pdfPage() {
+  const ops = [];
+  const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255].map(v => pdfNum(v / 255)).join(" "); };
+  return {
+    ops,
+    rect(x, y, w, h, fill) { ops.push(rgb(fill) + " rg " + [x, PDF_H - y - h, w, h].map(pdfNum).join(" ") + " re f"); },
+    roundRect(x, y, w, h, r, fill) {             // four Bezier quarter-circles
+      const k = r * .5523, t = PDF_H - y, b = t - h, P = (...n) => n.map(pdfNum).join(" ");
+      ops.push(rgb(fill) + " rg " + P(x + r, t) + " m " + P(x + w - r, t) + " l " + P(x + w - r + k, t, x + w, t - r + k, x + w, t - r) + " c " +
+               P(x + w, b + r) + " l " + P(x + w, b + r - k, x + w - r + k, b, x + w - r, b) + " c " + P(x + r, b) + " l " +
+               P(x + r - k, b, x, b + r - k, x, b + r) + " c " + P(x, t - r) + " l " + P(x, t - r + k, x + r - k, t, x + r, t) + " c f");
+    },
+    line(x1, y1, x2, y2, stroke, width = .6) {
+      ops.push(rgb(stroke) + " RG " + width + " w " + pdfNum(x1) + " " + pdfNum(PDF_H - y1) + " m " + pdfNum(x2) + " " + pdfNum(PDF_H - y2) + " l S");
+    },
+    text(x, y, s, size, o = {}) {
+      const w = pdfWidth(s, size, o.bold);
+      const tx = o.align === "right" ? x - w : o.align === "center" ? x - w / 2 : x;
+      ops.push("BT /" + (o.bold ? "F2" : "F1") + " " + size + " Tf " + rgb(o.color || "#14151b") + " rg " +
+               pdfNum(tx) + " " + pdfNum(PDF_H - y) + " Td " + pdfStr(s) + " Tj ET");
+    }
+  };
+}
+
+/* Pages -> a complete PDF file as a string. Everything is ASCII, so string
+   length equals byte length, which keeps the cross-reference offsets exact. */
+function pdfBuild(pages, title) {
+  const objs = [null, null,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"];
+  const kids = [];
+  pages.forEach(p => {
+    const content = p.ops.join("\n");
+    objs.push("<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream");
+    objs.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + PDF_W + " " + PDF_H + "] " +
+              "/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents " + (objs.length) + " 0 R >>");
+    kids.push(objs.length + " 0 R");
+  });
+  objs[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objs[1] = "<< /Type /Pages /Kids [" + kids.join(" ") + "] /Count " + kids.length + " >>";
+  // Document properties use PDFDocEncoding, where WinAnsi's dashes mean other letters.
+  objs.push("<< /Title " + pdfStr(title.replace(/[–—]/g, "-")) + " /Producer (ASPECTS) >>");
+
+  let out = "%PDF-1.4\n";
+  const offsets = objs.map((o, i) => { const at = out.length; out += (i + 1) + " 0 obj\n" + o + "\nendobj\n"; return at; });
+  const xref = out.length;
+  out += "xref\n0 " + (objs.length + 1) + "\n0000000000 65535 f \n" +
+         offsets.map(o => String(o).padStart(10, "0") + " 00000 n \n").join("") +
+         "trailer\n<< /Size " + (objs.length + 1) + " /Root 1 0 R /Info " + objs.length + " 0 R >>\nstartxref\n" + xref + "\n%%EOF\n";
+  return out;
+}
+
+/* The periods a report can cover. Weeks run Monday to Sunday. */
+function reportPeriods() {
+  const now = new Date();
+  const day = (d, n = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  const monday = day(now, -((now.getDay() + 6) % 7));
+  const month = ym => { const [y, m] = ym.split("-").map(Number); return [new Date(y, m - 1, 1), new Date(y, m, 1)]; };
+  const list = [
+    { id: "w0", label: "This week",  range: [monday, day(monday, 7)] },
+    { id: "w1", label: "Last week",  range: [day(monday, -7), monday] },
+    { id: "m0", label: "This month", ym: thisYM() },
+    { id: "m1", label: "Last month", ym: prevYM(thisYM()) }
+  ];
+  monthsPresent().filter(ym => ym !== thisYM() && ym !== prevYM(thisYM()))
+    .forEach(ym => list.push({ id: "m:" + ym, label: ymLabel(ym), ym }));
+  list.push({ id: "all", label: "All time", range: [new Date(0), new Date(8.64e15)] });
+  list.forEach(p => { if (p.ym) p.range = month(p.ym); });
+  return list;
+}
+
+function reportTitle(p) {
+  if (p.id === "all") return "All time";
+  if (p.ym) return p.range[0].toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const last = new Date(p.range[1].getFullYear(), p.range[1].getMonth(), p.range[1].getDate() - 1);
+  return p.range[0].toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " – " +
+         last.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function buildReport(p, rows) {
+  const INK = "#14151b", MUTED = "#6b7180", POS = "#0a8f4d", NEG = "#d81b45", ACCENT = "#5b4bff",
+        ORANGE = "#ff4d1f", SOFT = "#f3f1f7", STRIPE = "#faf9fc", LINE = "#e3e0ea";
+  const X0 = PDF_M, X1 = PDF_W - PDF_M, CW = X1 - X0, BOTTOM = PDF_H - 64;
+  const sum = type => rows.filter(t => t.type === type).reduce((a, t) => a + t.amount, 0);
+  const income = sum("income"), expense = sum("expense"), saved = sum("goal");
+  const left = income - expense - saved;
+  const byCat = {};
+  rows.filter(t => t.type === "expense").forEach(t => { const k = catOf(t.category).k; byCat[k] = (byCat[k] || 0) + t.amount; });
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const title = reportTitle(p);
+  const made = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  const pages = [];
+  let pg, y, tableOn = false;
+
+  function newPage() {
+    pg = pdfPage();
+    pages.push(pg);
+    if (pages.length === 1) {
+      pg.rect(0, 0, PDF_W, 104, INK);                 // the opening animation's ink, paper and orange
+      pg.rect(0, 104, PDF_W, 4, ORANGE);
+      pg.roundRect(X0, 32, 40, 40, 9, ACCENT);
+      pg.text(X0 + 20, 60.5, "A", 24, { bold: true, color: "#ffffff", align: "center" });
+      pg.text(X0 + 54, 50, "ASPECTS", 18, { bold: true, color: "#ffffff" });
+      pg.text(X0 + 54, 67, "Money report", 10.5, { color: "#c9cbd3" });
+      pg.text(X1, 50, title, 15, { bold: true, color: "#ffffff", align: "right" });
+      pg.text(X1, 67, "Made on " + made, 9, { color: "#c9cbd3", align: "right" });
+      y = 138;
+    } else {
+      pg.text(X0, 42, "ASPECTS  ·  " + title, 9.5, { bold: true, color: MUTED });
+      pg.text(X1, 42, "continued", 9, { color: MUTED, align: "right" });
+      pg.line(X0, 52, X1, 52, LINE);
+      y = 72;
+      if (tableOn) tableHead();
+    }
+  }
+  const room = h => { if (y + h > BOTTOM) newPage(); };
+  function section(name) {
+    room(56);
+    y += 14;
+    pg.text(X0, y + 12, name, 12.5, { bold: true });
+    y += 26;
+  }
+
+  // Columns: date | description | category | amount
+  const C_DESC = X0 + 74, C_CAT = X1 - 190, W_DESC = C_CAT - C_DESC - 12, W_CAT = 90;
+  function tableHead() {
+    pg.rect(X0, y, CW, 20, SOFT);
+    [["DATE", X0 + 8], ["DESCRIPTION", C_DESC], ["CATEGORY", C_CAT]].forEach(([h, x]) =>
+      pg.text(x, y + 13.5, h, 7.5, { bold: true, color: MUTED }));
+    pg.text(X1 - 8, y + 13.5, "AMOUNT", 7.5, { bold: true, color: MUTED, align: "right" });
+    y += 20;
+  }
+
+  newPage();
+
+  // Four headline numbers.
+  const tiles = [["Money in", income, POS], ["Money out", expense, NEG], ["Into savings goals", saved, ACCENT],
+                 ["What's left", left, left >= 0 ? POS : NEG]];
+  const tw = (CW - 30) / 4;
+  tiles.forEach(([label, v, c], i) => {
+    const x = X0 + i * (tw + 10), s = money(v);
+    const size = Math.min(15, (tw - 24) * 1000 / (pdfWidth(s, 1000, true) || 1));
+    pg.rect(x, y, tw, 60, SOFT);
+    pg.rect(x, y, 3, 60, c);
+    pg.text(x + 13, y + 21, label, 8.5, { color: MUTED });
+    pg.text(x + 13, y + 45, s, size, { bold: true, color: c });
+  });
+  y += 60 + 26;
+
+  // The same story in one plain sentence.
+  const savedPart = saved ? " and put " + money(saved) + " into savings goals" : "";
+  const story = left >= 0
+    ? "You spent " + money(expense) + savedPart + " out of the " + money(income) + " that came in, leaving " + money(left) + "."
+    : "You spent " + money(expense) + savedPart + ": " + money(-left) + " more than the " + money(income) + " that came in.";
+  pdfWrap(story, 11, false, CW).forEach(line => { pg.text(X0, y, line, 11, { color: INK }); y += 16; });
+
+  section("Where the money went");
+  if (!cats.length) {
+    pg.text(X0, y + 10, "No spending recorded in this period.", 10, { color: MUTED });
+    y += 24;
+  }
+  const BAR_X = X0 + 104, BAR_W = CW - 104 - 128;
+  cats.forEach(([k, v]) => {
+    room(24);
+    pg.text(X0, y + 11, k, 10);
+    pg.rect(BAR_X, y + 2, BAR_W, 11, SOFT);
+    pg.rect(BAR_X, y + 2, Math.max(2, BAR_W * v / cats[0][1]), 11, catOf(k).c);
+    pg.text(X1 - 44, y + 11, money(v), 10, { bold: true, align: "right" });
+    pg.text(X1, y + 11, Math.round(v / expense * 100) + "%", 9.5, { color: MUTED, align: "right" });
+    y += 22;
+  });
+
+  section("Every transaction");
+  tableHead();
+  tableOn = true;
+  rows.slice().reverse().forEach((t, i) => {             // newest first, like the app
+    room(19);
+    if (i % 2) pg.rect(X0, y, CW, 19, STRIPE);
+    const goal = t.goalId ? S.goals.find(g => g.id === t.goalId) : null;
+    const isGoal = t.type === "goal";
+    const what = t.note || (isGoal ? "Into " + (goal ? goal.name : "a savings goal") : t.type === "income" ? "Income" : catOf(t.category).k);
+    const kind = isGoal ? "Savings goal" : t.type === "income" ? "Income" : catOf(t.category).k;
+    const date = new Date(t.ts).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    pg.text(X0 + 8, y + 12.8, date, 9, { color: MUTED });
+    pg.text(C_DESC, y + 12.8, pdfFit(what, 9.5, false, W_DESC), 9.5);
+    pg.text(C_CAT, y + 12.8, pdfFit(kind, 9, false, W_CAT), 9, { color: MUTED });
+    pg.text(X1 - 8, y + 12.8, (t.type === "income" ? "+" : "-") + money(t.amount), 9.5,
+            { bold: true, color: t.type === "income" ? POS : isGoal ? ACCENT : NEG, align: "right" });
+    y += 19;
+  });
+  tableOn = false;
+  room(30);
+  pg.line(X0, y + 6, X1, y + 6, LINE);
+  pg.text(X0 + 8, y + 22, rows.length + (rows.length === 1 ? " transaction" : " transactions"), 9, { color: MUTED });
+  pg.text(X1 - 8, y + 22, "Net " + money(left), 10, { bold: true, color: left >= 0 ? POS : NEG, align: "right" });
+
+  pages.forEach((page, i) => {
+    page.line(X0, PDF_H - 44, X1, PDF_H - 44, LINE);
+    page.text(X0, PDF_H - 28, "ASPECTS  ·  Less guessing, more growing.", 8.5, { color: MUTED });
+    page.text(X1, PDF_H - 28, "Page " + (i + 1) + " of " + pages.length, 8.5, { color: MUTED, align: "right" });
+  });
+  return pdfBuild(pages, "ASPECTS money report: " + title);
+}
+
+function downloadReport() {
+  const periods = reportPeriods();
+  const p = periods.find(x => x.id === $("#reportPeriod").value) || periods[2];
+  const [from, to] = p.range;
+  const rows = txSorted().filter(t => { const d = new Date(t.ts); return d >= from && d < to; });
+  if (!rows.length) { toast("Nothing recorded for " + p.label.toLowerCase() + " yet", "info", "📄"); return; }
+  try {
+    const slug = p.id === "all" ? "all-time-" + todayKey() : p.ym ? p.ym : "week-" + dayKey(from);
+    downloadFile("aspects-report-" + slug + ".pdf", buildReport(p, rows), "application/pdf");
+    toast("PDF report saved — it's in your Downloads", "good", "📄");
+  } catch (err) {
+    console.error(err);
+    toast("Could not make the report", "bad", "⚠️");
+  }
+}
+
+function renderReportPeriods() {
+  const sel = $("#reportPeriod");
+  if (!sel) return;
+  const keep = sel.value || "m0";
+  const periods = reportPeriods();
+  sel.innerHTML = periods.map(p => '<option value="' + esc(p.id) + '">' + esc(p.label) + "</option>").join("");
+  sel.value = periods.some(p => p.id === keep) ? keep : "m0";
 }
 
 /* ============================================================
@@ -2718,32 +2970,6 @@ function exportData(prefix = "aspects-backup-") {
     console.error(err);
     toast("Export failed", "bad", "⚠️");
     return false;
-  }
-}
-
-/* For spreadsheets, not for restoring — only the JSON backup round-trips. */
-function exportCSV() {
-  // Text cells starting with = + - @ would run as formulas in Excel/Sheets.
-  const text = v => {
-    let s = String(v == null ? "" : v);
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const rows = [["Date", "Time", "Type", "Category", "Note", "Goal", "Amount", "Balance effect", "ID"]];
-  txSorted().forEach(t => {
-    const d = new Date(t.ts);
-    const goal = t.goalId ? S.goals.find(g => g.id === t.goalId) : null;
-    rows.push([
-      dayKey(d), d.toTimeString().slice(0, 5), text(t.type), text(catOf(t.category).k), text(t.note),
-      text(goal ? goal.name : ""), t.amount.toFixed(2), signed(t).toFixed(2), text(t.id)
-    ]);
-  });
-  try {
-    downloadFile("aspects-transactions-" + todayKey() + ".csv", "﻿" + rows.map(r => r.join(",")).join("\r\n"), "text/csv");
-    toast("Spreadsheet saved — it's in your Downloads", "good", "📊");
-  } catch (err) {
-    console.error(err);
-    toast("Export failed", "bad", "⚠️");
   }
 }
 
@@ -2836,7 +3062,7 @@ function mergeIn(inc) {
 
 function nukeAll() {
   ask("Erase all data?",
-      "Every transaction, task, goal, budget and streak will be permanently deleted. Export a backup first if you are not certain.",
+      "Every transaction, task, goal, budget and streak will be permanently deleted. Save a backup first if you are not certain.",
       () => {
         const theme = S.theme;                     // survives the wipe
         try {
@@ -2860,31 +3086,24 @@ function nukeAll() {
    COMMAND PALETTE
    ============================================================ */
 const COMMANDS = [
-  { e: "↑", t: "Add income",           k: "I",      run: () => openTx("income") },
-  { e: "↓", t: "Add expense",          k: "E",      run: () => openTx("expense") },
-  { e: "📝", t: "New micro-task",      k: "T",      run: openTaskModal },
-  { e: "🎯", t: "New savings goal",    k: "G",      run: () => openModal("goalModal", () => { $("#goalName").value = ""; $("#goalTarget").value = ""; }) },
-  { e: "🍅", t: "Start focus timer",   k: "",       run: () => { setView("tasks"); startPomo(); } },
-  { e: "🧧", t: "Edit budgets",        k: "",       run: openBudgets },
-  { e: "🔁", t: "Add recurring",       k: "",       run: () => openRecur(null) },
-  { e: "◈", t: "Go to Overview",       k: "1",      run: () => setView("overview") },
-  { e: "💰", t: "Go to Money",         k: "2",      run: () => setView("money") },
-  { e: "✅", t: "Go to Tasks",         k: "3",      run: () => setView("tasks") },
-  { e: "🎯", t: "Go to Goals",         k: "4",      run: () => setView("goals") },
-  { e: "⚙️", t: "Go to Settings",      k: "5",      run: () => setView("settings") },
-  { e: "🎬", t: "Play opening animation", k: "",     run: replaySplash },
-  { e: "🌓", t: "Toggle dark / light", k: "D",      run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
-  { e: "💾", t: "Save a backup",       k: "",       run: () => exportData() },
-  { e: "♻️", t: "Restore from a backup", k: "",     run: () => $("#importFile").click() },
-  { e: "📊", t: "Download as a spreadsheet", k: "", run: exportCSV },
-  { e: "✨", t: "Check for updates",   k: "",       run: () => checkForUpdates(true) },
-  { e: "☢️", t: "Erase all data",      k: "",       run: nukeAll }
-];
-
-const SHORTCUT_HELP = [
-  ["Ctrl K", "Command palette"], ["I", "Add income"], ["E", "Add expense"],
-  ["T", "New task"], ["G", "New goal"], ["D", "Toggle theme"],
-  ["1 – 5", "Jump between sections"], ["Esc", "Close any dialog"]
+  { e: "↑", t: "Add income",             run: () => openTx("income") },
+  { e: "↓", t: "Add expense",            run: () => openTx("expense") },
+  { e: "📝", t: "New micro-task",         run: openTaskModal },
+  { e: "🎯", t: "New savings goal",       run: () => openModal("goalModal", () => { $("#goalName").value = ""; $("#goalTarget").value = ""; }) },
+  { e: "🍅", t: "Start focus timer",      run: () => { setView("tasks"); startPomo(); } },
+  { e: "🧧", t: "Edit budgets",           run: openBudgets },
+  { e: "🔁", t: "Add recurring",          run: () => openRecur(null) },
+  { e: "◈", t: "Go to Overview",         run: () => setView("overview") },
+  { e: "💰", t: "Go to Money",            run: () => setView("money") },
+  { e: "✅", t: "Go to Tasks",            run: () => setView("tasks") },
+  { e: "🎯", t: "Go to Goals",            run: () => setView("goals") },
+  { e: "⚙️", t: "Go to Settings",        run: () => setView("settings") },
+  { e: "🌓", t: "Toggle dark / light",    run: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark") },
+  { e: "💾", t: "Save a backup",          run: () => exportData() },
+  { e: "♻️", t: "Restore from a backup", run: () => $("#importFile").click() },
+  { e: "📄", t: "Download a PDF report",  run: downloadReport },
+  { e: "✨", t: "Check for updates",      run: () => checkForUpdates(true) },
+  { e: "☢️", t: "Erase all data",        run: nukeAll }
 ];
 
 let palIndex = 0, palResults = COMMANDS;
@@ -2908,7 +3127,7 @@ function renderPalette(q) {
     ? palResults.map((c, i) =>
         '<div class="pal-item' + (i === palIndex ? " active" : "") + '" role="option" data-pal="' + i +
         '" aria-selected="' + (i === palIndex) + '"><span class="pi-emoji" aria-hidden="true">' + c.e + "</span>" +
-        "<span>" + esc(c.t) + "</span>" + (c.k ? '<kbd class="pi-hint">' + esc(c.k) + "</kbd>" : "") + "</div>").join("")
+        "<span>" + esc(c.t) + "</span></div>").join("")
     : '<div class="pal-empty">No command matches “' + esc(q) + '”</div>';
 
   const active = $(".pal-item.active");
@@ -2982,13 +3201,8 @@ function wire() {
   // Settings
   $("#themeBtn").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
   $("#themeSelect").addEventListener("change", e => applyTheme(e.target.value));
-  $("#splashSelect").addEventListener("change", e => {
-    try { localStorage.setItem("aspects.splash", e.target.value); } catch (_) {}
-    toast(e.target.value === "off" ? "Opening animation off" : "Opening animation on", "info", "🎬");
-  });
-  $("#splashReplay").addEventListener("click", replaySplash);
   $("#exportBtn").addEventListener("click", () => exportData());
-  $("#csvBtn").addEventListener("click", exportCSV);
+  $("#reportBtn").addEventListener("click", downloadReport);
   $("#rescueBtn").addEventListener("click", downloadUnreadable);
   $("#checkUpdateBtn").addEventListener("click", () => checkForUpdates(true));
   $("#updateNowBtn").addEventListener("click", applyUpdate);
@@ -3402,7 +3616,6 @@ function boot() {
   applyTheme(S.theme || "dark");
   applyRecurring();
 
-  if (navigator.platform && /Mac/i.test(navigator.platform)) $("#palKbd").textContent = "⌘ K";
 
   wire();
 
