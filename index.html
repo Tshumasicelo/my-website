@@ -600,7 +600,8 @@ select.input {
    Two monochrome scenes (the road ahead, a skyline that grows like a
    bar chart) close over a paper strip, the mark and slogan land, orange
    marker crosses out "guessing" and draws growth under "growing", then
-   the scenes tear apart onto the app. ~1.9 s; tap or any key skips.
+   the scenes tear apart onto the app. Timed here at 1x; the player
+   runs it 1.6x slower (~3 s). Tap or any key skips.
    ============================================================ */
 #splash { display: none; }
 .splash-on #splash {
@@ -735,23 +736,32 @@ select.input {
   var root = document.documentElement, el = document.getElementById("splash"), timer = null, playing = false;
   if (!el) return;
   var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* Slow-motion knob: the CSS is timed at 1x and everything — delays included —
+     plays PACE times slower, so the choreography keeps its rhythm at any speed. */
+  var PACE = reduce ? 1 : 1.6, SHOW_MS = 1900, EXIT_MS = 460;
 
-  function finish() {
+  function pace(rate) {
+    if (el.getAnimations) el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = rate; });
+  }
+  function finish(e) {
     if (!playing) return;
     playing = false;
     clearTimeout(timer);
     window.removeEventListener("keydown", finish, true);
     el.classList.add("sp-out");
-    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : 460);
+    var rate = e ? 1 : 1 / PACE;            // a skip leaves at full speed; the natural ending glides
+    pace(rate);
+    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : EXIT_MS / rate);
   }
   function play() {
     el.classList.remove("sp-out");
     root.classList.remove("splash-on");
     void el.offsetWidth;                    // restart every CSS animation from frame one
     root.classList.add("splash-on");
+    pace(1 / PACE);
     playing = true;
     clearTimeout(timer);
-    timer = setTimeout(finish, reduce ? 900 : 1900);
+    timer = setTimeout(finish, reduce ? 900 : SHOW_MS * PACE);
     window.addEventListener("keydown", finish, true);
   }
   el.addEventListener("pointerdown", finish);

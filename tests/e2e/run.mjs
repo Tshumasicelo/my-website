@@ -301,7 +301,7 @@ fresh.on("pageerror", e => errors.push(e.message));
 await fresh.goto(BASE, { waitUntil: "load" });
 check("splash: plays on a fresh launch", await splashOn(fresh));
 check("splash: shows the slogan", /Less\s*guessing,\s*more\s*growing\./.test((await fresh.textContent("#splash")).replace(/\s+/g, " ")));
-check("splash: lifts by itself", await waitSplashGone(fresh, 3500));
+check("splash: lifts by itself", await waitSplashGone(fresh, 6000));
 await fresh.reload({ waitUntil: "load" });
 check("splash: not replayed on reload", !(await splashOn(fresh)));
 await fresh.close();
@@ -322,7 +322,7 @@ await fresh.click('.tab[data-view="settings"]');
 await fresh.click("#splashReplay");
 await sleep(150);
 check("splash: Replay plays it on demand", await splashOn(fresh));
-await waitSplashGone(fresh, 3500);
+await waitSplashGone(fresh, 6000);
 await fresh.selectOption("#splashSelect", "on");
 await fresh.close();
 
