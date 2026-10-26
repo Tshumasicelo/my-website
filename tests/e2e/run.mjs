@@ -299,9 +299,13 @@ async function waitSplashGone(p, ms) {
 let fresh = await ctx.newPage();           // a new tab is a new launch
 fresh.on("pageerror", e => errors.push(e.message));
 await fresh.goto(BASE, { waitUntil: "load" });
+const splashStart = Date.now();
 check("splash: plays on a fresh launch", await splashOn(fresh));
 check("splash: shows the slogan", /Less\s*guessing,\s*more\s*growing\./.test((await fresh.textContent("#splash")).replace(/\s+/g, " ")));
-check("splash: lifts by itself", await waitSplashGone(fresh, 6000));
+// The brief: at least 4.5 s of animation before the app's UI shows.
+await sleep(Math.max(0, 4400 - (Date.now() - splashStart)));
+check("splash: still playing at 4.4 s", await splashOn(fresh));
+check("splash: lifts by itself", await waitSplashGone(fresh, 9000));
 await fresh.reload({ waitUntil: "load" });
 check("splash: not replayed on reload", !(await splashOn(fresh)));
 await fresh.close();
@@ -322,7 +326,7 @@ await fresh.click('.tab[data-view="settings"]');
 await fresh.click("#splashReplay");
 await sleep(150);
 check("splash: Replay plays it on demand", await splashOn(fresh));
-await waitSplashGone(fresh, 6000);
+await waitSplashGone(fresh, 9000);
 await fresh.selectOption("#splashSelect", "on");
 await fresh.close();
 

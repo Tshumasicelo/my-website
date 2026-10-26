@@ -597,11 +597,15 @@ select.input {
 }
 /* ============================================================
    OPENING ANIMATION — torn-paper reveal: "less guessing, more growing".
-   Two monochrome scenes (the road ahead, a skyline that grows like a
-   bar chart) close over a paper strip, the mark and slogan land, orange
-   marker crosses out "guessing" and draws growth under "growing", then
-   the scenes tear apart onto the app. Timed here at 1x; the player
-   runs it 1.6x slower (~3 s). Tap or any key skips.
+   A 4.6 s story told in beats, then the scenes tear apart onto the app:
+     0.0  the two scenes slam in over a paper strip (road ahead / skyline)
+     0.45 the mark pops · 0.8 ASPECTS types out · 0.6 the skyline grows
+     1.5  the trend line climbs to an orange dot that keeps pulsing
+     1.75 "Less guessing," — and orange marker crosses "guessing" out
+     2.75 "more growing." — and a rising arrow is drawn under it
+     3.7  a living hold: slow push-in, city lights, the mark breathes
+     4.6  exit. Motion stays snappy; the extra time goes to the story.
+   A tap or any key skips straight to the app.
    ============================================================ */
 #splash { display: none; }
 .splash-on #splash {
@@ -622,80 +626,98 @@ select.input {
 }
 .splash-on body { overflow: hidden; }
 
+/* Panels reach 40px past the screen edge so their overshoot never shows paper. */
 .sp-panel { position: absolute; left: 0; right: 0; height: calc(50% - var(--sp-gap) + 40px); box-sizing: border-box; background: #0d0e13; will-change: transform; }
-.sp-top { top: -40px; padding-top: 40px; animation: spInTop .52s cubic-bezier(.2,.9,.25,1.06) both; }
-.sp-bot { bottom: -40px; padding-bottom: 40px; animation: spInBot .52s cubic-bezier(.2,.9,.25,1.06) .06s both; }
-.sp-scene { position: absolute; left: 0; width: 100%; height: calc(100% - 40px); display: block; }
-.sp-top .sp-scene { top: 40px; }
-.sp-bot .sp-scene { top: 0; }
+.sp-top { top: -40px;    animation: spInTop .55s cubic-bezier(.2,.9,.25,1.06) both; }
+.sp-bot { bottom: -40px; animation: spInBot .55s cubic-bezier(.2,.9,.25,1.06) .08s both; }
+.sp-view { position: absolute; left: 0; right: 0; height: calc(100% - 40px); overflow: hidden; }
+.sp-top .sp-view { top: 40px; }
+.sp-bot .sp-view { top: 0; }
+/* The camera slowly pushes in, like footage rather than a still. */
+.sp-scene { display: block; width: 100%; height: 100%; transform-origin: 50% 100%;
+            animation: spPush 5.2s cubic-bezier(.3,.1,.3,1) both; }
 .sp-tear { position: absolute; left: 0; width: 100%; height: 26px; display: block; }
 .sp-top .sp-tear { top: calc(100% - 1px); }
 .sp-bot .sp-tear { bottom: calc(100% - 1px); transform: scaleY(-1); }
 
-.sp-dash { animation: spRoad .55s linear infinite; }
-.sp-lights { animation: spFlicker .5s steps(2) .2s 2 both; }
+.sp-dash { animation: spRoad .6s linear infinite; }
+.sp-lights { animation: spFlicker .32s steps(2) .3s 4 both; }
 .sp-bar { transform-box: fill-box; transform-origin: 50% 100%;
-          animation: spBar .55s cubic-bezier(.2,.9,.3,1.15) both; animation-delay: calc(.22s + var(--i) * 38ms); }
+          animation: spBar .7s cubic-bezier(.2,.9,.3,1.12) both; animation-delay: calc(.6s + var(--i) * 80ms); }
+.sp-bar rect + rect { animation: spWindows .7s ease both; animation-delay: calc(1.7s + var(--i) * 110ms); }
 .sp-trend { fill: none; stroke: #f4f1ea; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round;
-            stroke-dashoffset: 1; stroke-dasharray: 1; animation: spDraw .5s ease-out .62s both; }
+            stroke-dasharray: 1; stroke-dashoffset: 1; animation: spDraw 1s cubic-bezier(.45,0,.3,1) 1.5s both; }
 .sp-dot { fill: var(--sp-orange); transform-box: fill-box; transform-origin: center;
-          filter: drop-shadow(0 0 6px rgba(255,77,31,.9)); animation: spPop .4s cubic-bezier(.3,1.7,.5,1) 1.08s both; }
+          filter: drop-shadow(0 0 6px rgba(255,77,31,.9)); animation: spPop .45s cubic-bezier(.3,1.7,.5,1) 2.45s both; }
+.sp-ring { fill: none; stroke: var(--sp-orange); stroke-width: 2; transform-box: fill-box; transform-origin: center; opacity: 0;
+           animation: spRipple 1.3s ease-out 2.75s infinite; }
 
 .sp-center { position: absolute; left: 16px; right: 16px; top: 50%; transform: translateY(-50%);
              display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; color: var(--sp-ink); }
 .sp-logo { width: 60px; height: 60px; filter: drop-shadow(0 8px 16px rgba(91,75,255,.35));
-           animation: spPop .5s cubic-bezier(.3,1.6,.5,1) .24s both; }
+           animation: spPop .65s cubic-bezier(.3,1.6,.5,1) .45s both, spBreathe 1.8s ease-in-out 3.5s infinite; }
 .sp-word { display: flex; font-weight: 800; font-size: 23px; letter-spacing: .3em; margin-right: -.3em; line-height: 1; }
-.sp-word span { display: inline-block; animation: spRise .42s cubic-bezier(.2,.9,.3,1.25) both;
-                animation-delay: calc(.36s + var(--i) * 36ms); }
+.sp-word span { display: inline-block; animation: spRise .5s cubic-bezier(.2,.9,.3,1.25) both;
+                animation-delay: calc(.8s + var(--i) * 65ms); }
 .sp-slogan { font-size: 19px; font-weight: 700; line-height: 1.45; letter-spacing: -.01em; }
-.sp-line { display: block; animation: spRise .42s ease both; }
-.sp-l1 { animation-delay: .62s; }
-.sp-l2 { animation-delay: .74s; }
+.sp-line { display: block; animation: spRise .55s cubic-bezier(.2,.9,.3,1.15) both; }
+.sp-l1 { animation-delay: 1.75s; }
+.sp-l2 { animation-delay: 2.75s; }
 .sp-mark { position: relative; display: inline-block; }
 .sp-mark svg { position: absolute; left: -6%; width: 112%; height: auto; overflow: visible; pointer-events: none; }
 .sp-strike svg { top: 50%; transform: translateY(-45%); }
 .sp-grow svg { top: 80%; }
 .sp-draw { fill: none; stroke: var(--sp-orange); stroke-linecap: round; stroke-linejoin: round;
-           stroke-dasharray: 1; stroke-dashoffset: 1; animation: spDraw .26s ease-out both; }
+           stroke-dasharray: 1; stroke-dashoffset: 1; animation: spDraw .4s ease-out both; }
 .sp-mark .sp-draw { stroke-width: 2.4; }
 .sp-strike .sp-draw { stroke-width: 3.2; }
+.sp-strike .sp-draw:nth-child(1) { animation-delay: 2.25s; }
+.sp-strike .sp-draw:nth-child(2) { animation-delay: 2.45s; }
+.sp-grow .sp-draw:nth-child(1) { animation-delay: 3.2s; animation-duration: .5s; }
+.sp-grow .sp-draw:nth-child(2) { animation-delay: 3.65s; animation-duration: .3s; }
 .sp-scrib { position: absolute; width: 128px; height: auto; overflow: visible; pointer-events: none; }
-.sp-scrib .sp-draw { stroke-width: 6.5; animation-duration: .5s; }
+.sp-scrib .sp-draw { stroke-width: 6.5; animation-duration: .7s; }
 .sp-scrib-a { top: 4px; right: -10px; }
 .sp-scrib-b { bottom: 6px; left: -10px; transform: rotate(180deg); }
+.sp-scrib-a .sp-draw { animation-delay: 1.1s; }
+.sp-scrib-b .sp-draw { animation-delay: 1.35s; }
 
 /* Exit: the scenes tear apart, the paper lifts, the app is already there. */
-#splash.sp-out { animation: spFade .3s ease .14s both; }
-#splash.sp-out .sp-top { animation: spOutTop .42s cubic-bezier(.6,0,.75,.35) both; }
-#splash.sp-out .sp-bot { animation: spOutBot .42s cubic-bezier(.6,0,.75,.35) both; }
-#splash.sp-out .sp-center { animation: spLift .3s ease both; }
-#splash.sp-out .sp-scrib { animation: spFade .2s ease both; }
+#splash.sp-out { animation: spFade .4s ease .2s both; }
+#splash.sp-out .sp-top { animation: spOutTop .6s cubic-bezier(.6,0,.75,.35) both; }
+#splash.sp-out .sp-bot { animation: spOutBot .6s cubic-bezier(.6,0,.75,.35) both; }
+#splash.sp-out .sp-center { animation: spLift .45s ease both; }
+#splash.sp-out .sp-scrib { animation: spFade .3s ease both; }
 
-@keyframes spInTop  { from { transform: translateY(calc(-100% - 30px)); } to { transform: none; } }
-@keyframes spInBot  { from { transform: translateY(calc(100% + 30px)); } to { transform: none; } }
-@keyframes spOutTop { to { transform: translateY(calc(-100% - 30px)); } }
-@keyframes spOutBot { to { transform: translateY(calc(100% + 30px)); } }
-@keyframes spRoad   { to { stroke-dashoffset: -18; } }
-@keyframes spFlicker { from { opacity: .35; } to { opacity: 1; } }
-@keyframes spBar    { from { transform: scaleY(0); } to { transform: none; } }
-@keyframes spDraw   { to { stroke-dashoffset: 0; } }
-@keyframes spPop    { from { transform: scale(.3) rotate(-14deg); opacity: 0; } 60% { opacity: 1; } to { transform: none; opacity: 1; } }
-@keyframes spRise   { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes spLift   { to { transform: translateY(-50%) scale(1.06); opacity: 0; } }
-@keyframes spFade   { to { opacity: 0; } }
+@keyframes spInTop   { from { transform: translateY(calc(-100% - 30px)); } to { transform: none; } }
+@keyframes spInBot   { from { transform: translateY(calc(100% + 30px)); } to { transform: none; } }
+@keyframes spOutTop  { to { transform: translateY(calc(-100% - 30px)); } }
+@keyframes spOutBot  { to { transform: translateY(calc(100% + 30px)); } }
+@keyframes spPush    { from { transform: scale(1); } to { transform: scale(1.1); } }
+@keyframes spRoad    { to { stroke-dashoffset: -18; } }
+@keyframes spFlicker { from { opacity: .3; } to { opacity: 1; } }
+@keyframes spBar     { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes spWindows { from { opacity: .15; } to { opacity: 1; } }
+@keyframes spDraw    { to { stroke-dashoffset: 0; } }
+@keyframes spPop     { from { transform: scale(.3) rotate(-14deg); opacity: 0; } 60% { opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes spBreathe { 50% { transform: scale(1.06); } }
+@keyframes spRipple  { from { transform: scale(1); opacity: .8; } to { transform: scale(3.4); opacity: 0; } }
+@keyframes spRise    { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes spLift    { to { transform: translateY(-50%) scale(1.06); opacity: 0; } }
+@keyframes spFade    { to { opacity: 0; } }
 
 /* Reduced motion: no movement — the finished frame, briefly, then a cut. */
 @media (prefers-reduced-motion: reduce) {
   #splash, #splash * { animation-delay: 0s !important; }
-  .sp-dash, .sp-lights { animation: none !important; }
+  .sp-dash, .sp-lights, .sp-ring, .sp-scene { animation: none !important; }
+  .sp-logo { animation: spPop .001ms both !important; }
 }
 </style>
 </head>
 <body>
 <!-- Opening animation (decorative; the app boots underneath it). -->
 <div id="splash" aria-hidden="true"><div class="sp-stage">
-  <div class="sp-panel sp-top"><svg class="sp-scene" viewBox="0 0 360 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <div class="sp-panel sp-top"><div class="sp-view"><svg class="sp-scene" viewBox="0 0 360 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
 <defs><radialGradient id="spGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
 <rect width="360" height="300" fill="#121318"/>
 <path fill="#1b1d23" d="M0 0H360L205 135H155Z"/>
@@ -709,24 +731,24 @@ select.input {
 <g stroke="#8a8f99" stroke-width="1.6"><path d="M168 166L48 300"/><path d="M192 166L312 300"/></g>
 <path class="sp-dash" d="M180 166V300" stroke="#d9dce2" stroke-width="3" stroke-dasharray="7 11"/>
 <g stroke="#e1e3e8" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M120 288V254M108 266l12-13 12 13"/><path d="M240 288V254M228 266l12-13 12 13"/></g>
-</svg><svg class="sp-tear" viewBox="0 0 1000 30" preserveAspectRatio="none"><path fill="#fbf8f6" d="M0 0H1000V17.2L989 22.4L979 20.6L965 12.9L950 12.6L935 13.1L925 18.8L905 14.0L893 22.0L872 21.2L858 27.6L848 25.7L835 14.3L825 16.9L805 14.9L789 22.2L775 20.8L765 13.0L753 22.9L739 17.0L722 19.3L709 24.7L691 15.9L675 20.4L654 23.7L642 27.7L631 18.7L612 14.4L597 12.6L579 24.2L563 26.0L550 23.1L533 21.3L518 25.4L497 19.6L479 13.0L461 22.4L439 25.2L426 18.2L409 12.4L394 14.7L383 12.9L364 14.1L352 18.3L332 13.3L317 20.8L296 25.1L276 16.5L262 17.7L241 27.3L230 14.8L218 15.7L203 21.4L191 12.1L176 17.9L160 27.2L142 20.2L125 22.8L115 26.4L96 26.0L76 18.3L62 13.7L45 13.0L35 15.3L24 17.4L14 12.0L3 13.6L0 12.4Z"/><path fill="#0d0e13" d="M0 0H1000V13.5L983 4.8L971 7.2L957 4.5L937 14.9L922 8.8L912 4.2L898 6.2L879 4.9L869 14.4L853 4.8L837 3.3L821 14.7L801 11.4L789 7.4L778 12.3L762 12.3L748 5.7L729 14.8L709 12.7L689 11.9L677 9.2L664 3.3L654 6.4L642 11.3L620 8.4L599 14.9L578 7.4L566 5.7L554 5.5L537 13.8L517 8.8L500 12.6L490 10.9L469 12.4L450 8.7L439 12.5L426 12.6L404 7.8L390 14.4L371 5.0L361 4.8L340 12.7L329 12.9L307 10.9L294 9.6L283 3.2L261 10.8L246 14.2L231 13.5L211 5.5L199 6.5L187 10.0L174 8.0L164 13.9L150 8.5L133 13.9L119 14.0L104 9.4L88 3.2L73 5.2L64 12.6L53 8.7L34 9.7L21 9.2L5 12.4L0 9.7Z"/></svg></div>
-  <div class="sp-panel sp-bot"><svg class="sp-scene" viewBox="0 0 360 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+</svg></div><svg class="sp-tear" viewBox="0 0 1000 30" preserveAspectRatio="none"><path fill="#fbf8f6" d="M0 0H1000V17.2L989 22.4L979 20.6L965 12.9L950 12.6L935 13.1L925 18.8L905 14.0L893 22.0L872 21.2L858 27.6L848 25.7L835 14.3L825 16.9L805 14.9L789 22.2L775 20.8L765 13.0L753 22.9L739 17.0L722 19.3L709 24.7L691 15.9L675 20.4L654 23.7L642 27.7L631 18.7L612 14.4L597 12.6L579 24.2L563 26.0L550 23.1L533 21.3L518 25.4L497 19.6L479 13.0L461 22.4L439 25.2L426 18.2L409 12.4L394 14.7L383 12.9L364 14.1L352 18.3L332 13.3L317 20.8L296 25.1L276 16.5L262 17.7L241 27.3L230 14.8L218 15.7L203 21.4L191 12.1L176 17.9L160 27.2L142 20.2L125 22.8L115 26.4L96 26.0L76 18.3L62 13.7L45 13.0L35 15.3L24 17.4L14 12.0L3 13.6L0 12.4Z"/><path fill="#0d0e13" d="M0 0H1000V13.5L983 4.8L971 7.2L957 4.5L937 14.9L922 8.8L912 4.2L898 6.2L879 4.9L869 14.4L853 4.8L837 3.3L821 14.7L801 11.4L789 7.4L778 12.3L762 12.3L748 5.7L729 14.8L709 12.7L689 11.9L677 9.2L664 3.3L654 6.4L642 11.3L620 8.4L599 14.9L578 7.4L566 5.7L554 5.5L537 13.8L517 8.8L500 12.6L490 10.9L469 12.4L450 8.7L439 12.5L426 12.6L404 7.8L390 14.4L371 5.0L361 4.8L340 12.7L329 12.9L307 10.9L294 9.6L283 3.2L261 10.8L246 14.2L231 13.5L211 5.5L199 6.5L187 10.0L174 8.0L164 13.9L150 8.5L133 13.9L119 14.0L104 9.4L88 3.2L73 5.2L64 12.6L53 8.7L34 9.7L21 9.2L5 12.4L0 9.7Z"/></svg></div>
+  <div class="sp-panel sp-bot"><div class="sp-view"><svg class="sp-scene" viewBox="0 0 360 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
 <defs><linearGradient id="spSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1d24"/><stop offset="1" stop-color="#0d0e13"/></linearGradient>
 <pattern id="spWin" width="7" height="9" patternUnits="userSpaceOnUse"><rect x="2" y="3" width="2.4" height="3" fill="#e9e6df" opacity=".28"/></pattern></defs>
 <rect width="360" height="300" fill="url(#spSky)"/>
 <g stroke="#fff" stroke-opacity=".06"><path d="M0 60H360M0 120H360M0 180H360M0 240H360"/></g>
 <g class="sp-bar" style="--i:0"><rect x="6" y="254" width="26" height="46" fill="#24272f"/><rect x="6" y="254" width="26" height="46" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:1"><rect x="36" y="239" width="28" height="61" fill="#2b2f38"/><rect x="36" y="239" width="28" height="61" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:2"><rect x="68" y="242" width="26" height="58" fill="#272a32"/><rect x="68" y="242" width="26" height="58" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:3"><rect x="98" y="217" width="28" height="83" fill="#30343d"/><rect x="98" y="217" width="28" height="83" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:4"><rect x="130" y="222" width="26" height="78" fill="#2a2d35"/><rect x="130" y="222" width="26" height="78" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:5"><rect x="160" y="200" width="26" height="100" fill="#24272f"/><rect x="160" y="200" width="26" height="100" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:6"><rect x="190" y="208" width="28" height="92" fill="#2b2f38"/><rect x="190" y="208" width="28" height="92" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:7"><rect x="222" y="182" width="30" height="118" fill="#272a32"/><rect x="222" y="182" width="30" height="118" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:8"><rect x="256" y="195" width="30" height="105" fill="#30343d"/><rect x="256" y="195" width="30" height="105" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:9"><rect x="290" y="167" width="30" height="133" fill="#2a2d35"/><rect x="290" y="167" width="30" height="133" fill="url(#spWin)"/></g><g class="sp-bar" style="--i:10"><rect x="324" y="145" width="28" height="155" fill="#24272f"/><rect x="324" y="145" width="28" height="155" fill="url(#spWin)"/></g>
 <path class="sp-trend" pathLength="1" d="M19 240 L50 225 L81 228 L112 203 L143 208 L173 186 L204 194 L237 168 L271 181 L305 153 L338 131"/>
-<circle class="sp-dot" cx="338" cy="131" r="6"/>
-</svg><svg class="sp-tear" viewBox="0 0 1000 30" preserveAspectRatio="none"><path fill="#fbf8f6" d="M0 0H1000V17.2L989 22.4L979 20.6L965 12.9L950 12.6L935 13.1L925 18.8L905 14.0L893 22.0L872 21.2L858 27.6L848 25.7L835 14.3L825 16.9L805 14.9L789 22.2L775 20.8L765 13.0L753 22.9L739 17.0L722 19.3L709 24.7L691 15.9L675 20.4L654 23.7L642 27.7L631 18.7L612 14.4L597 12.6L579 24.2L563 26.0L550 23.1L533 21.3L518 25.4L497 19.6L479 13.0L461 22.4L439 25.2L426 18.2L409 12.4L394 14.7L383 12.9L364 14.1L352 18.3L332 13.3L317 20.8L296 25.1L276 16.5L262 17.7L241 27.3L230 14.8L218 15.7L203 21.4L191 12.1L176 17.9L160 27.2L142 20.2L125 22.8L115 26.4L96 26.0L76 18.3L62 13.7L45 13.0L35 15.3L24 17.4L14 12.0L3 13.6L0 12.4Z"/><path fill="#0d0e13" d="M0 0H1000V13.5L983 4.8L971 7.2L957 4.5L937 14.9L922 8.8L912 4.2L898 6.2L879 4.9L869 14.4L853 4.8L837 3.3L821 14.7L801 11.4L789 7.4L778 12.3L762 12.3L748 5.7L729 14.8L709 12.7L689 11.9L677 9.2L664 3.3L654 6.4L642 11.3L620 8.4L599 14.9L578 7.4L566 5.7L554 5.5L537 13.8L517 8.8L500 12.6L490 10.9L469 12.4L450 8.7L439 12.5L426 12.6L404 7.8L390 14.4L371 5.0L361 4.8L340 12.7L329 12.9L307 10.9L294 9.6L283 3.2L261 10.8L246 14.2L231 13.5L211 5.5L199 6.5L187 10.0L174 8.0L164 13.9L150 8.5L133 13.9L119 14.0L104 9.4L88 3.2L73 5.2L64 12.6L53 8.7L34 9.7L21 9.2L5 12.4L0 9.7Z"/></svg></div>
-  <svg class="sp-scrib sp-scrib-a" viewBox="0 0 128 92" aria-hidden="true"><path class="sp-draw" pathLength="1" style="animation-delay:.55s" d="M8 10L120 4L14 30L122 24L22 52L124 44L34 74L118 68"/></svg>
-  <svg class="sp-scrib sp-scrib-b" viewBox="0 0 128 92" aria-hidden="true"><path class="sp-draw" pathLength="1" style="animation-delay:.7s" d="M8 10L120 4L14 30L122 24L22 52L124 44L34 74L118 68"/></svg>
+<circle class="sp-ring" cx="338" cy="131" r="6"/><circle class="sp-dot" cx="338" cy="131" r="6"/>
+</svg></div><svg class="sp-tear" viewBox="0 0 1000 30" preserveAspectRatio="none"><path fill="#fbf8f6" d="M0 0H1000V17.2L989 22.4L979 20.6L965 12.9L950 12.6L935 13.1L925 18.8L905 14.0L893 22.0L872 21.2L858 27.6L848 25.7L835 14.3L825 16.9L805 14.9L789 22.2L775 20.8L765 13.0L753 22.9L739 17.0L722 19.3L709 24.7L691 15.9L675 20.4L654 23.7L642 27.7L631 18.7L612 14.4L597 12.6L579 24.2L563 26.0L550 23.1L533 21.3L518 25.4L497 19.6L479 13.0L461 22.4L439 25.2L426 18.2L409 12.4L394 14.7L383 12.9L364 14.1L352 18.3L332 13.3L317 20.8L296 25.1L276 16.5L262 17.7L241 27.3L230 14.8L218 15.7L203 21.4L191 12.1L176 17.9L160 27.2L142 20.2L125 22.8L115 26.4L96 26.0L76 18.3L62 13.7L45 13.0L35 15.3L24 17.4L14 12.0L3 13.6L0 12.4Z"/><path fill="#0d0e13" d="M0 0H1000V13.5L983 4.8L971 7.2L957 4.5L937 14.9L922 8.8L912 4.2L898 6.2L879 4.9L869 14.4L853 4.8L837 3.3L821 14.7L801 11.4L789 7.4L778 12.3L762 12.3L748 5.7L729 14.8L709 12.7L689 11.9L677 9.2L664 3.3L654 6.4L642 11.3L620 8.4L599 14.9L578 7.4L566 5.7L554 5.5L537 13.8L517 8.8L500 12.6L490 10.9L469 12.4L450 8.7L439 12.5L426 12.6L404 7.8L390 14.4L371 5.0L361 4.8L340 12.7L329 12.9L307 10.9L294 9.6L283 3.2L261 10.8L246 14.2L231 13.5L211 5.5L199 6.5L187 10.0L174 8.0L164 13.9L150 8.5L133 13.9L119 14.0L104 9.4L88 3.2L73 5.2L64 12.6L53 8.7L34 9.7L21 9.2L5 12.4L0 9.7Z"/></svg></div>
+  <svg class="sp-scrib sp-scrib-a" viewBox="0 0 128 92" aria-hidden="true"><path class="sp-draw" pathLength="1" d="M8 10L120 4L14 30L122 24L22 52L124 44L34 74L118 68"/></svg>
+  <svg class="sp-scrib sp-scrib-b" viewBox="0 0 128 92" aria-hidden="true"><path class="sp-draw" pathLength="1" d="M8 10L120 4L14 30L122 24L22 52L124 44L34 74L118 68"/></svg>
   <div class="sp-center">
     <svg class="sp-logo" viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="spMark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b6bff"/><stop offset=".55" stop-color="#5b4bff"/><stop offset="1" stop-color="#00c2a8"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="url(#spMark)"/><path d="M140 388L256 130L372 388" fill="none" stroke="#fff" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/><path d="M187 305H325" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
     <div class="sp-word"><span style="--i:0">A</span><span style="--i:1">S</span><span style="--i:2">P</span><span style="--i:3">E</span><span style="--i:4">C</span><span style="--i:5">T</span><span style="--i:6">S</span></div>
     <div class="sp-slogan">
-      <span class="sp-line sp-l1">Less <span class="sp-mark sp-strike">guessing<svg viewBox="0 0 100 14"><path class="sp-draw" pathLength="1" style="animation-delay:.88s" d="M2 9C20 4 34 12 50 7S80 11 98 5"/><path class="sp-draw" pathLength="1" style="animation-delay:.98s" d="M4 11C30 6 60 13 96 8"/></svg></span>,</span>
-      <span class="sp-line sp-l2">more <span class="sp-mark sp-grow">growing<svg viewBox="0 0 100 26"><path class="sp-draw" pathLength="1" style="animation-delay:1.04s" d="M2 18C30 24 62 20 90 6"/><path class="sp-draw" pathLength="1" style="animation-delay:1.24s" d="M80 4L91 5L88 16"/></svg></span>.</span>
+      <span class="sp-line sp-l1">Less <span class="sp-mark sp-strike">guessing<svg viewBox="0 0 100 14"><path class="sp-draw" pathLength="1" d="M2 9C20 4 34 12 50 7S80 11 98 5"/><path class="sp-draw" pathLength="1" d="M4 11C30 6 60 13 96 8"/></svg></span>,</span>
+      <span class="sp-line sp-l2">more <span class="sp-mark sp-grow">growing<svg viewBox="0 0 100 26"><path class="sp-draw" pathLength="1" d="M2 18C30 24 62 20 90 6"/><path class="sp-draw" pathLength="1" d="M80 4L91 5L88 16"/></svg></span>.</span>
     </div>
   </div>
 </div></div>
@@ -736,32 +758,27 @@ select.input {
   var root = document.documentElement, el = document.getElementById("splash"), timer = null, playing = false;
   if (!el) return;
   var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  /* Slow-motion knob: the CSS is timed at 1x and everything — delays included —
-     plays PACE times slower, so the choreography keeps its rhythm at any speed. */
-  var PACE = reduce ? 1 : 1.6, SHOW_MS = 1900, EXIT_MS = 460;
+  var SHOW_MS = reduce ? 1500 : 4600, EXIT_MS = 640, SKIP_SPEED = 1.6;
 
-  function pace(rate) {
-    if (el.getAnimations) el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = rate; });
-  }
   function finish(e) {
     if (!playing) return;
     playing = false;
     clearTimeout(timer);
     window.removeEventListener("keydown", finish, true);
     el.classList.add("sp-out");
-    var rate = e ? 1 : 1 / PACE;            // a skip leaves at full speed; the natural ending glides
-    pace(rate);
-    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : EXIT_MS / rate);
+    // A skip (tap or key) leaves faster than the natural ending.
+    var speed = e && el.getAnimations ? SKIP_SPEED : 1;
+    if (speed !== 1) el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = speed; });
+    setTimeout(function () { root.classList.remove("splash-on"); el.classList.remove("sp-out"); }, reduce ? 0 : EXIT_MS / speed);
   }
   function play() {
     el.classList.remove("sp-out");
     root.classList.remove("splash-on");
     void el.offsetWidth;                    // restart every CSS animation from frame one
     root.classList.add("splash-on");
-    pace(1 / PACE);
     playing = true;
     clearTimeout(timer);
-    timer = setTimeout(finish, reduce ? 900 : SHOW_MS * PACE);
+    timer = setTimeout(finish, SHOW_MS);
     window.addEventListener("keydown", finish, true);
   }
   el.addEventListener("pointerdown", finish);
