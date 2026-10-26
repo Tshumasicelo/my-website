@@ -29,6 +29,11 @@ fs.mkdirSync(out, { recursive: true });
 const BASE = "http://localhost:" + PORT + "/";
 const KEY = "aspects.v2";
 const results = [];
+// The build under test, and what the next release would be called; read from the
+// code so a version bump never needs a test edit.
+const CUR = fs.readFileSync(path.join(repo, "index.html"), "utf8").match(/const APP_VERSION = "([^"]+)"/)[1];
+const NEXT = CUR.replace(/(\d+)$/, n => String(Number(n) + 1));
+const reEsc = v => v.replace(/\./g, "\\.");
 const check = (name, ok, detail = "") => { results.push({ name, ok: !!ok, detail }); console.log((ok ? "PASS " : "FAIL ") + name + (detail ? "  — " + detail : "")); };
 
 /* ---------- deploying builds into the served folder ---------- */
@@ -45,12 +50,12 @@ function deploy(kind) {
   let sw = fs.readFileSync(path.join(repo, "sw.js"), "utf8");
   let ver = fs.readFileSync(path.join(repo, "version.json"), "utf8");
   if (kind === "lagging") {   // version.json already says 9.9.9, the page isn't published yet
-    ver = ver.replace('"version": "1.1.0"', '"version": "9.9.9"').replace(/"notes": "[^"]*"/, '"notes": "Test notes"');
+    ver = ver.replace(`"version": "${CUR}"`, '"version": "9.9.9"').replace(/"notes": "[^"]*"/, '"notes": "Test notes"');
   }
   if (kind === "next") {   // what the next real deploy looks like: all three bumped
-    html = html.replace('const APP_VERSION = "1.1.0"', 'const APP_VERSION = "1.1.1"');
-    sw = sw.replace('CACHE_VERSION = "v1.1.0"', 'CACHE_VERSION = "v1.1.1"');
-    ver = ver.replace('"version": "1.1.0"', '"version": "1.1.1"');
+    html = html.replace(`const APP_VERSION = "${CUR}"`, `const APP_VERSION = "${NEXT}"`);
+    sw = sw.replace(`CACHE_VERSION = "v${CUR}"`, `CACHE_VERSION = "v${NEXT}"`);
+    ver = ver.replace(`"version": "${CUR}"`, `"version": "${NEXT}"`);
   }
   fs.writeFileSync(path.join(site, "index.html"), html);
   fs.writeFileSync(path.join(site, "sw.js"), sw);
@@ -119,8 +124,21 @@ const sept = ymShift(-1), aug = ymShift(-2), lastYear = new Date(now.getFullYear
 /* ======================================================================== */
 console.log("browser:", BROWSER, "· baseline:", BASELINE, "· cdn:", BLOCK_CDN ? "blocked" : "live");
 deploy("old");
-const startServer = () => spawn(process.execPath, [path.join(here, "server.mjs"), site, String(PORT)], { stdio: "ignore" });
-let server = startServer();
+/* Resolves once the server says it is listening. If the port is taken (say, by a
+   server left over from a crashed run) it fails loudly instead of letting the
+   tests talk to someone else's stale files. */
+function startServer() {
+  const child = spawn(process.execPath, [path.join(here, "server.mjs"), site, String(PORT)], { stdio: ["ignore", "pipe", "pipe"] });
+  return new Promise((resolve, reject) => {
+    let err = "";
+    child.stderr.on("data", d => { err += d; });
+    child.stdout.on("data", d => { if (String(d).includes("serving")) resolve(child); });
+    child.on("exit", code => reject(new Error(`test server exited (code ${code}); is port ${PORT} already in use? ` +
+                                              (err.split("\n").find(l => /EADDRINUSE|Error/.test(l)) || ""))));
+  });
+}
+let server = await startServer();
+process.on("exit", () => server.kill());   // never leave a server behind, even after a crash
 await sleep(800);
 let ctx = await launch();
 let page = await ctx.newPage();
@@ -156,7 +174,7 @@ if (v === "old") {
   await sleep(1200);
   v = await appVersion(page);
 }
-check("upgrade: new build is running", v === "1.1.0", v);
+check("upgrade: new build is running", v === CUR, v);
 const after = await state(page);
 check("upgrade: every transaction survived", before.tx.every(t => after.tx.some(x => x.id === t.id && x.amount === t.amount && x.ts === t.ts && x.note === t.note && x.category === t.category)),
       after.tx.length + " rows");
@@ -167,7 +185,7 @@ for (let i = 0; i < 40; i++) {   // the quiet swap waits for the background vers
   if (!cachesNow.some(k => k.endsWith("v1.0.0"))) break;
   await sleep(250);
 }
-check("upgrade: old caches replaced by v1.1.0", cachesNow.some(k => k.endsWith("v1.1.0")) && !cachesNow.some(k => k.endsWith("v1.0.0")), cachesNow.join(","));
+check("upgrade: old caches replaced by v" + CUR, cachesNow.some(k => k.endsWith("v" + CUR)) && !cachesNow.some(k => k.endsWith("v1.0.0")), cachesNow.join(","));
 
 if (!BLOCK_CDN) {
   let charted = false;
@@ -269,12 +287,59 @@ s = await state(page);
 check("multi-tab: both tabs' entries kept", s.tx.some(t => t.note === "From tab A") && s.tx.some(t => t.note === "From tab B"), s.tx.length + " rows");
 await tabB.close();
 
+/* ---- 8b. Opening animation ----
+   Runs here, while one build is deployed: later sections swap builds back and
+   forth, and the offline-copy updater then reloads open tabs mid-check. */
+const splashOn = p => p.evaluate(() => document.documentElement.classList.contains("splash-on"));
+async function waitSplashGone(p, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (!(await splashOn(p))) return true; await sleep(100); }
+  return false;
+}
+let fresh = await ctx.newPage();           // a new tab is a new launch
+fresh.on("pageerror", e => errors.push(e.message));
+await fresh.goto(BASE, { waitUntil: "load" });
+check("splash: plays on a fresh launch", await splashOn(fresh));
+check("splash: shows the slogan", /Less\s*guessing,\s*more\s*growing\./.test((await fresh.textContent("#splash")).replace(/\s+/g, " ")));
+check("splash: lifts by itself", await waitSplashGone(fresh, 3500));
+await fresh.reload({ waitUntil: "load" });
+check("splash: not replayed on reload", !(await splashOn(fresh)));
+await fresh.close();
+
+fresh = await ctx.newPage();
+await fresh.goto(BASE, { waitUntil: "load" });
+await sleep(250);
+await fresh.mouse.click(200, 300);
+check("splash: a tap skips it", await waitSplashGone(fresh, 900));
+await fresh.click('.tab[data-view="settings"]');
+await fresh.selectOption("#splashSelect", "off");
+await fresh.close();
+
+fresh = await ctx.newPage();
+await fresh.goto(BASE, { waitUntil: "load" });
+check("splash: Off in Settings is respected", !(await splashOn(fresh)));
+await fresh.click('.tab[data-view="settings"]');
+await fresh.click("#splashReplay");
+await sleep(150);
+check("splash: Replay plays it on demand", await splashOn(fresh));
+await waitSplashGone(fresh, 3500);
+await fresh.selectOption("#splashSelect", "on");
+await fresh.close();
+
+fresh = await ctx.newPage();
+await fresh.goto(BASE + "?go=expense", { waitUntil: "load" });
+check("splash: home-screen shortcuts skip it", !(await splashOn(fresh)));
+await fresh.waitForSelector("#txModal.open", { timeout: 3000 }).catch(() => {});
+check("splash: shortcut still opens its dialog", await fresh.evaluate(() => document.getElementById("txModal").classList.contains("open")));
+await fresh.close();
+
 /* ---- 9. Update check & Update now (GitHub Pages lag simulated) ---- */
 deploy("lagging");
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
 await sleep(800);
-check("update: newer version detected", !(await page.isHidden("#updateNowBtn")) && /9\.9\.9/.test(await page.textContent("#updateStatus")));
+check("update: newer version detected", !(await page.isHidden("#updateNowBtn")) && /9\.9\.9/.test(await page.textContent("#updateStatus")),
+      await page.textContent("#updateStatus") + " | " + await toasts(page));
 check("update: release notes shown", /Test notes/.test(await page.textContent("#updateNotes")));
 const rowsBefore = (await state(page)).tx.length;
 await Promise.all([page.waitForURL(/updated=/).catch(() => {}), page.click("#updateNowBtn")]);
@@ -286,18 +351,18 @@ deploy("new");
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
 t = await waitToast(page, /latest version/);
-check("update: up-to-date reported", /latest version \(1\.1\.0\)/.test(t), t);
+check("update: up-to-date reported", new RegExp("latest version \\(" + reEsc(CUR) + "\\)").test(t), t);
 
-/* ---- 10. A real next deploy (1.1.1) picked up by an open app ---- */
+/* ---- 10. A real next deploy (CUR -> NEXT) picked up by an open app ---- */
 deploy("next");
 await page.click("#checkUpdateBtn");
 await sleep(2500);
 check("next deploy: Update now offered", !(await page.isHidden("#updateNowBtn")), await page.textContent("#updateStatus"));
 await Promise.all([page.waitForURL(/updated=|localhost:8765\/$/, { timeout: 10000 }).catch(() => {}), page.click("#updateNowBtn")]);
 await sleep(2500);
-check("next deploy: now running 1.1.1", (await appVersion(page)) === "1.1.1", await appVersion(page));
+check("next deploy: now running " + NEXT, (await appVersion(page)) === NEXT, await appVersion(page));
 t = await waitToast(page, /Running version/);
-check("next deploy: confirms data intact", /Running version 1\.1\.1 — all \d+ transactions are here/.test(t), t);
+check("next deploy: confirms data intact", new RegExp("Running version " + reEsc(NEXT) + " — all \\d+ transactions are here").test(t), t);
 check("next deploy: no data lost", (await state(page)).tx.length === rowsBefore);
 
 /* ---- 11. Offline ---- */
@@ -306,14 +371,14 @@ check("next deploy: no data lost", (await state(page)).tx.length === rowsBefore)
 server.kill();
 await sleep(500);
 await goto(page);
-check("offline: app opens from the offline copy", (await appVersion(page)) === "1.1.1");
+check("offline: app opens from the offline copy", (await appVersion(page)) === NEXT);
 check("offline: data present", (await state(page)).tx.length === rowsBefore);
 await page.click('.tab[data-view="settings"]');
 await page.click("#checkUpdateBtn");
 check("offline: update check fails gracefully", /offline|Couldn't reach/i.test(await waitToast(page, /offline|Couldn't reach/i)));
-server = startServer();
+server = await startServer();
 await sleep(800);
-deploy("new");   // back to the 1.1.0 build for the remaining tests
+deploy("new");   // back to the build under test for the remaining tests
 
 /* ---- 12. Unreadable data is never overwritten ---- */
 await page.evaluate(KEY => localStorage.setItem(KEY, '{"tx":[{"id":"x"'), KEY);

@@ -10,7 +10,7 @@
    ============================================================ */
 "use strict";
 
-const CACHE_VERSION = "v1.1.0";
+const CACHE_VERSION = "v1.2.0";
 const CORE_CACHE    = "aspects-core-" + CACHE_VERSION;
 const RUNTIME_CACHE = "aspects-runtime-" + CACHE_VERSION;
 
